@@ -16,7 +16,6 @@ echo '127.0.0.1 pgadmin.odoo.test' | sudo tee -a /etc/hosts
 
 127.0.0.1 erp.odoo.test
 127.0.0.1 pgadmin.odoo.test
-```
 
 In order to understand how each environment works, take a look at `odoo/entrypoint.sh`.
 
