@@ -1,0 +1,101 @@
+services:
+  odoo:
+    build:
+      context: ./
+      dockerfile: ./odoo/Dockerfile
+    depends_on:
+      - postgres
+    tty: true
+    volumes:
+      - data-dir:${DATA_DIR}
+      - ./odoo/extra-addons:${EXTRA_ADDONS}
+      - ./odoo/custom-addons:${CUSTOM_ADDONS}
+      - ./odoo/entrypoint.sh:/entrypoint.sh
+      - ./odoo/odoorc.sh:/odoorc.sh
+    env_file:
+      - ./.env
+    networks:
+      - internal
+
+  postgres:
+    build: 
+      context: ./postgres
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - pg-data:${PGDATA}
+      - ./postgres/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh
+    environment:
+      - POSTGRES_DB
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - PGDATA
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.23.3
+    depends_on:
+      - odoo
+    restart: unless-stopped
+    tty: true
+    expose:
+      - 80/tcp
+    volumes:
+      - ./nginx/nginx.conf:${NGINX_CONF}
+      - ./nginx/default.conf:${NGINX_DEFAULT_CONF}
+    environment:
+      - VIRTUAL_HOST
+      - LETSENCRYPT_HOST
+      - LETSENCRYPT_EMAIL
+      - CORS_ALLOWED_DOMAIN
+    networks:
+      - internal
+
+  pgadmin:
+    image: dpage/pgadmin4:6.21
+    restart: unless-stopped
+    expose:
+      - 80
+    volumes:
+      - pgadmin-data:${PGADMIN_DATA}
+    environment:
+      - PGADMIN_DEFAULT_EMAIL
+      - PGADMIN_DEFAULT_PASSWORD
+      - VIRTUAL_HOST=${PGADMIN_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${PGADMIN_LETSENCRYPT_HOST}
+      - LETSENCRYPT_EMAIL
+    networks:
+      - internal
+
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:1.2.0
+    depends_on:
+      - nginx
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - ./nginx-proxy/nginx.conf:${NGINX_CONF}
+      - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
+      - certs:${NGINX_CERTS}:ro
+      - vhost:${NGINX_VHOST}
+      - html:${NGINX_HTML}
+      - ${DOCKER_SOCK}:${TEMP_DOCKER_SOCK}:ro
+    environment:
+      - TRUST_DOWNSTREAM_PROXY
+      - CORS_ALLOWED_DOMAIN
+    networks:
+      - internal
+
+volumes:
+  data-dir:
+  pg-data:
+  certs:
+  vhost:
+  html:
+  pgadmin-data:
+
+networks:
+  internal:
+    driver: bridge

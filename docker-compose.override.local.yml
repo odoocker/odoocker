@@ -1,0 +1,20 @@
+services:
+  odoo:
+    restart: 'no'
+    ports:
+      - 8069:8069
+      - 8071:8071
+      - 8072:8072
+
+  postgres:
+    restart: 'no'
+    ports:
+      - 5432:5432
+  
+  nginx:
+    restart: 'no'
+
+  nginx-proxy:
+    restart: 'no'
+    ports:
+      - 80:80
