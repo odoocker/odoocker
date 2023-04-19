@@ -13,9 +13,10 @@ echo '127.0.0.1 erp.odoo.test' | sudo tee -a /etc/hosts
 echo '127.0.0.1 pgadmin.odoo.test' | sudo tee -a /etc/hosts
 ```
 - For Windows, go to `C:\Windows\System32\drivers\etc\`, and add this line:
-
+```
 127.0.0.1 erp.odoo.test
 127.0.0.1 pgadmin.odoo.test
+```
 
 In order to understand how each environment works, take a look at `odoo/entrypoint.sh`.
 
