@@ -33,7 +33,7 @@ defaults=(
 
     [HTTP_INTERFACE]=${HTTP_INTERFACE}
     [HTTP_PORT]=${HTTP_PORT}
-    [LONGPOLLING_PORT]=${LONGPOLLING_PORT}
+    [GEVENT_PORT]=${GEVENT_PORT}
     [HTTP_ENABLE]=${HTTP_ENABLE}
     [PROXY_MODE]=${PROXY_MODE}
     [X_SENDFILE]=${X_SENDFILE}
@@ -161,8 +161,8 @@ http_interface={HTTP_INTERFACE}
 ; --http-port | -p | --xmlrpc-port
 http_port={HTTP_PORT}
 
-; --longpolling_port
-longpolling_port={LONGPOLLING_PORT}
+; --gevent-port
+gevent_port={GEVENT_PORT}
 
 ; --no-http | --no-xmlrpc
 http_enable={HTTP_ENABLE}
@@ -171,7 +171,7 @@ http_enable={HTTP_ENABLE}
 proxy_mode={PROXY_MODE}
 
 ; --x-sendfile
-x_sendfile ={X_SENDFILE}
+x_sendfile={X_SENDFILE}
 
 ;---------------;
 ; Testing Group ;
