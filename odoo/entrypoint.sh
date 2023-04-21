@@ -30,6 +30,13 @@ case "$1" in
                 exec odoo --config ${ODOO_RC} --database=${DB_NAME} --update=${UPDATE} --init=${INIT} --load=${SERVER_WIDE_MODULES} --dev=${DEV_MODE}
             fi
 
+            if [ ${APP_ENV} = 'debug' ] ; then
+                # Automagically update the addons you are currently working on.
+                echo /usr/bin/python3 -m debugpy --listen 0.0.0.0:8071 /usr/bin/odoo --config ${ODOO_RC} --database= --update= --init= --load= --dev=
+
+                exec /usr/bin/python3 -m debugpy --listen 0.0.0.0:8071 /usr/bin/odoo --config ${ODOO_RC} --database=${DB_NAME} --update=${UPDATE} --init=${INIT} --load=${SERVER_WIDE_MODULES} --dev=${DEV_MODE}
+            fi
+
             if [ ${APP_ENV} = 'testing' ] ; then
                 # Work in progres... (DO NOT USE)
                 echo odoo --config ${ODOO_RC} --database=test_${DB_NAME} --db-filter=test_${DB_NAME} --test-enable --test-commit --log-handler=:DEBUG --log-level=debug --workers=0 --init= --update=

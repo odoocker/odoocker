@@ -12,6 +12,7 @@ services:
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
       - ./odoo/odoorc.sh:/odoorc.sh
+    command: /usr/bin/python3 -m debugpy --listen ${HTTP_INTERFACE}:8888 /usr/bin/odoo --config ${ODOO_RC}
     env_file:
       - ./.env
     networks:

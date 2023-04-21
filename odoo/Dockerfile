@@ -53,6 +53,12 @@ RUN git clone ${ENTERPRISE_REPO} ${ROOT_PATH}/enterprise --depth 1 --branch ${OD
 #-----------------------#
 #   PIP Dependencies    #
 #-----------------------#
+# Copy PIP requirements
+COPY ./odoo/requirements.txt /tmp/requirements.txt
+
+# Install PIP requirements
+RUN python3 -m pip install -r /tmp/requirements.txt
+# RUN pip3 install debugpy
 
 #-----------------------#
 #       Odoo Conf       #
