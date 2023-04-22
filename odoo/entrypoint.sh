@@ -32,7 +32,7 @@ case "$1" in
 
             if [ ${APP_ENV} = 'debug' ] ; then
                 # Automagically update the addons you are currently working on.
-                echo /usr/bin/python3 -m debugpy --listen 0.0.0.0:8888 /usr/bin/odoo --config ${ODOO_RC} --database= --update= --init= --load= --dev=
+                exec /usr/bin/python3 -m debugpy --listen 0.0.0.0:8888 /usr/bin/odoo --config ${ODOO_RC} --database=${DB_NAME} --update=${UPDATE} --init=${INIT} --load=${SERVER_WIDE_MODULES} --dev=${DEV_MODE}
 
                 exec /usr/bin/python3 -m debugpy --listen 0.0.0.0:8888 /usr/bin/odoo --config ${ODOO_RC} --database=${DB_NAME} --update=${UPDATE} --init=${INIT} --load=${SERVER_WIDE_MODULES} --dev=${DEV_MODE}
             fi
