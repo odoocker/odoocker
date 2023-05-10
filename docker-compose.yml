@@ -12,7 +12,6 @@ services:
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
       - ./odoo/odoorc.sh:/odoorc.sh
-    command: /usr/bin/python3 -m debugpy --listen ${HTTP_INTERFACE}:8888 /usr/bin/odoo --config ${ODOO_RC}
     env_file:
       - ./.env
     networks:
@@ -36,7 +35,7 @@ services:
       - internal
 
   nginx:
-    image: nginx:1.23.3
+    image: nginx:1.24.0
     depends_on:
       - odoo
     restart: unless-stopped
@@ -54,24 +53,8 @@ services:
     networks:
       - internal
 
-  pgadmin:
-    image: dpage/pgadmin4:6.21
-    restart: unless-stopped
-    expose:
-      - 80
-    volumes:
-      - pgadmin-data:${PGADMIN_DATA}
-    environment:
-      - PGADMIN_DEFAULT_EMAIL
-      - PGADMIN_DEFAULT_PASSWORD
-      - VIRTUAL_HOST=${PGADMIN_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=${PGADMIN_LETSENCRYPT_HOST}
-      - LETSENCRYPT_EMAIL
-    networks:
-      - internal
-
   nginx-proxy:
-    image: nginxproxy/nginx-proxy:1.2.0
+    image: nginxproxy/nginx-proxy:1.3.0
     depends_on:
       - nginx
     restart: unless-stopped

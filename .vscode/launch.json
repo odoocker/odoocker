@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Odoocker Debug",
+            "type": "python",
+            "request": "attach",
+            "host": "localhost",
+            "port": 8069,
+            "debugServer": 8071,
+            "justMyCode": false,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}/odoo/custom-addons",
+                    "remoteRoot": "/usr/lib/python3/dist-packages/odoo/custom-addons"
+                },
+                {
+                    "localRoot": "${workspaceFolder}/odoo/extra-addons",
+                    "remoteRoot": "/usr/lib/python3/dist-packages/odoo/extra-addons"
+                },
+                // {
+                //     "localRoot": "${workspaceFolder}/core/odoo",
+                //     "remoteRoot": "/usr/bin/odoo"
+                // }
+            ]
+        }
+    ]
+}

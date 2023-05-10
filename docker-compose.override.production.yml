@@ -16,7 +16,7 @@ services:
       - 443:443
 
   letsencrypt:
-    image: nginxproxy/acme-companion:2.2.4
+    image: nginxproxy/acme-companion:2.2.8
     depends_on:
       - nginx-proxy
     restart: unless-stopped
