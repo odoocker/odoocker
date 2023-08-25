@@ -71,10 +71,10 @@ If you prefer to update the packages everytime you restart Odoo container, you c
 This environment (`APP_ENV=debug`) works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
 
 #### 4. *Testing*:
-- This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
-- A `test_DB_NAME` database is automagically created
-- The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
-- Use `TEST_TAGS=test_tag_1` to filter your tests.
+This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
+A `test_DB_NAME` database is automagically created
+The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
+Use `TEST_TAGS=test_tag_1` to filter your tests.
 
 *NOTE: Avoid running tests without tags*; otherwise, it will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
 
@@ -98,15 +98,15 @@ This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons
 #### 7. *Production*:
 This is the production environment (`APP_ENV=production`). It ensures no demo data is loaded and debugging is turned off. It also brings up the `Let's Encrypt` container, so you won't worry about `SSL Certificates` anymore! Some `.env` variables are overwritten in this setup.
 
-- Take down previous setup containers
+Take down previous setup containers
 ```
 docker-compose down
 ```
-- Repace the `docker-compose.override.yml` with `docker-compose.override.production.yml` to bring `Let's Encrypt` container.
+Repace the `docker-compose.override.yml` with `docker-compose.override.production.yml` to bring `Let's Encrypt` container.
 ```
 cp docker-compose.override.production.yml docker-compose.override.yml
 ```
-- Rebuild the containers
+Rebuild the containers
 ```
 docker-compose up -d --build && docker-compose logs odoo
 ```
