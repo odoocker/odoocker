@@ -111,7 +111,7 @@ This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons
 
 **NOTE: Do not bring down & up again unless you want to perform a whole update again.**
 
-#### 7. *Production*:
+#### 7. Production:
 This is the production environment (`APP_ENV=production`). It ensures no demo data is loaded and debugging is turned off. It also brings up the `Let's Encrypt` container, so you won't worry about `SSL Certificates` anymore! Some `.env` variables are overwritten in this setup.
 
 Take down previous setup of containers
