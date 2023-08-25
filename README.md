@@ -9,13 +9,13 @@ cp .env.example .env && cp docker-compose.override.local.yml docker-compose.over
 ```
 3. Manually add entry to your `hosts` file as below
 ```
-echo '127.0.0.1 erp.icomsa.test' | sudo tee -a /etc/hosts
-echo '127.0.0.1 pgadmin.icomsa.test' | sudo tee -a /etc/hosts
+echo '127.0.0.1 erp.odoocker.test' | sudo tee -a /etc/hosts
+echo '127.0.0.1 pgadmin.odoocker.test' | sudo tee -a /etc/hosts
 ```
 - For Windows, go to `C:\Windows\System32\drivers\etc\`, and add this line:
 ```
-127.0.0.1 erp.icomsa.test
-127.0.0.1 pgadmin.icomsa.test
+127.0.0.1 erp.odoocker.test
+127.0.0.1 pgadmin.odoocker.test
 ```
 
 In order to understand how each environment works, take a look at `odoo/entrypoint.sh`.
@@ -177,7 +177,7 @@ The following tips will enhance your developing and production experience.
 
 #### Define the following aliases:
 ```
-alias odoo='cd odoo-icomsa'
+alias odoo='cd odoocker'
 
 alias hard-deploy='git pull && docker-compose down && docker-compose pull && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f odoo'
 
@@ -280,7 +280,7 @@ sudo apt update && sudo apt upgrade -y
 ```
 4. Go to the project folder in /home/ubuntu or (~)
 ```
-cd ~/odoo-icomsa
+cd ~/odoocker
 ```
 or with alias:
 ```
