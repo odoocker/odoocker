@@ -19,9 +19,6 @@ Welcome to Odoocker, a game-changer in the world of Odoo Development and Deploym
 In essence, Odoocker isn't just another tool in the developer's arsenal. It's a philosophy. A commitment to clean, efficient, and delightful Odoo development. So, whether you’re a seasoned Odoo veteran or just starting your journey, Odoocker is here to make sure it’s smooth sailing all the way.
 
 Note: We always recommend keeping abreast with the official documentation for the most detailed and updated insights. Knowledge is power, after all.
-5. **Streamlined Deployment**: No more lengthy, confusing deployment processes. 
-
-We wish you a frictionless Odoo Docker experience with `Odoocker`. Say goodbye to endless hours of debugging and embrace efficient development!
 
 **Note:** While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
 
@@ -103,7 +100,7 @@ A `test_DB_NAME` database is automagically created.
 The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
 Use `TEST_TAGS=test_tag_1` to filter your tests.
 
-**NOTE: Avoid running tests without tags**; otherwise, it will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
+**NOTE: Avoid running tests without tags**; otherwise, it will trigger tests in all installed addons and we don't want this. For now, let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
 
 #### 5. Full:
 This environment (`APP_ENV=full`) will install the `INIT` modules in a new or existing `DB_NAME`. This allows us to have a fresh production database replica.
@@ -118,7 +115,7 @@ It's highly recommended to use this command to run this environment
 docker-compose down && git pull && docker-compose pull && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f odoo
 ```
 
-This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons*, basically, ot upgrades the whole Odoo instance to the newest. Additionally, it will also pull the latest images of the other containers in this project.
+This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons*, basically, it upgrades the whole Odoo instance to the newest. Additionally, it will also pull the latest images of the other containers in this project.
 
 **NOTE: Do not bring down & up again unless you want to perform a whole update again.**
 
