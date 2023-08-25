@@ -14,7 +14,7 @@
       - [Production](#7-production)
   - [Pro(d) Tips](#prod-tips)
     - [Define the following aliases](#1-define-the-following-aliases)
-    - [NEVER run **docker-compose down -v** in Production](#2-never-run-docker-compose-down-v-in-production)
+    - [NEVER run **docker-compose down -v** in Production](#2-never-run-docker-compose-down--v-in-production)
     - [Colorize your branches](#3-colorize-your-branches)
     - [Odoo Shell](#4-odoo-shell)
     - [Odoo Scaffold](#5-odoo-scaffold)
