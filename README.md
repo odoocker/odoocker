@@ -59,30 +59,30 @@ docker-compose down && docker-compose up -d --build && docker-compose logs odoo
 
 Here are the descriptions of each of them.
 
-- #### *Fresh* or *Restore*
+#### 1. *Fresh* or *Restore*
 This environment (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
 
-- #### *Local*:
-- This environment will strictly follow the `.env` variables with no command-line overwrites. You most likely be using this regularly.
-- Use `DEV_MODE=reload,qweb` to activate hot reload when changing `python` and `xml` files.
-- If you prefer to update the packages everytime you restart Odoo container, you can set `UPDATE=module1,module2,module3`.
+#### 2. *Local*:
+This environment (`APP_ENV=local`) will strictly follow the `.env` variables with no command-line overwrites. You'll most likely be using this regularly.
+Use `DEV_MODE=reload,qweb` to activate hot reload when changing `python` and `xml` files.
+If you prefer to update the packages everytime you restart Odoo container, you can set `UPDATE=module1,module2,module3`.
 
-- ### *Debug*:
-This environment works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
+#### 3. *Debug*:
+This environment (`APP_ENV=debug`) works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
 
-- #### *Testing*:
-- This environment is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
+#### 4. *Testing*:
+- This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
 - A `test_DB_NAME` database is automagically created
 - The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
 - Use `TEST_TAGS=test_tag_1` to filter your tests.
 
-*NOTE: Avoid running tests without tags*; this will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
+*NOTE: Avoid running tests without tags*; otherwise, it will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
 
-- #### *Full*:
+#### 5. *Full*:
 This environment (`APP_ENV=full`) will install the `INIT` modules in a new or existing `DB_NAME`. This allows us to have a fresh production database replica.
 
-- #### *Staging*:
-This environment sets `UPDATE=all`; this allows us to *update* all installed addons at once.
+#### 6. *Staging*:
+This environment (`APP_ENV=staging`) sets `UPDATE=all`; this allows us to *update* all installed addons at once.
 It also allows to install new packages before the upgrade through `INIT`.
 
 It's highly recommended to use this command to run this environment
@@ -95,7 +95,7 @@ This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons
 
 **NOTE: Do not bring down & up again unless you want to perform a whole update again.**
 
-- #### *Production*:
+#### 7. *Production*:
 This is the production environment (`APP_ENV=production`). It ensures no demo data is loaded and debugging is turned off. It also brings up the `Let's Encrypt` container, so you won't worry about `SSL Certificates` anymore! Some `.env` variables are overwritten in this setup.
 
 - Take down previous setup containers
@@ -111,10 +111,10 @@ cp docker-compose.override.production.yml docker-compose.override.yml
 docker-compose up -d --build && docker-compose logs odoo
 ```
 
-## Pro(d) Tips
+# Pro(d) Tips
 The following tips will enhance your developing and production experience.
 
-#### Define the following aliases:
+### Define the following aliases:
 ```
 alias odoo='cd odoocker'
 
@@ -125,12 +125,12 @@ alias deploy='docker-compose down && git pull && docker-compose up -d --build &&
 alias logs='docker-compose logs -f --tail 2000 odoo'
 ```
 
-#### NEVER run docker-compose down **-v** in Production
+### NEVER run docker-compose down **-v** in Production
 ...without having a tested backed up database
 
 Have in mind that dropping volumes will destroy DB data, Odoo Conf & Filestore, *Let's Encrypt certificates, and more!*. If you execute this command several times in `prod` in a short period of time, you may reach the `Let's Encrypt` certificates limit and Odoocker won't be able to generate new ones after **several hours**.
 
-#### Colorize your branches
+### Colorize your branches
 Add the following to `~/.bashrc`
 ```
 # Color git branches
@@ -148,7 +148,7 @@ fi
 unset color_prompt force_color_prompt
 ```
 
-#### Odoo Shell
+### Odoo Shell
 1. Log into the odoo container
 ```
 docker-compose exec odoo bash
@@ -158,7 +158,7 @@ docker-compose exec odoo bash
 odoo shell --http-port=8071
 ```
 
-#### Odoo Scaffold
+### Odoo Scaffold
 1. Log into the odoo container
 ```
 docker-compose exec -u root odoo
@@ -173,10 +173,10 @@ odoo scaffold <addon_name>
 ```
 - The new addon will be available in the `odoo/custom_addons` folder in this project.
 
-## DB Connection
+# DB Connection
 - Any other Postgres Database Manager con connect to the DB using `.env` credentials.
 
-#### PgAdmin Container
+## PgAdmin Container
 - This project comes with a PgAdmin container which is loaded only in `docker-compose.override.pgadmin.yml`.
 In order to manage DB we provide a pgAdmin container.
 In order to bring this up, simply run:
@@ -190,7 +190,7 @@ docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-co
 
 If your instance has pgAdmin, make sure you adapt this to your aliases.
 
-## Deployment Process
+# Deployment Process
 Note: the deployment process is easier & faster with aliases.
 
 1. Backup the production Databases from `/web/database/manager`.
