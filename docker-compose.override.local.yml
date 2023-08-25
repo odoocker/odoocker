@@ -3,6 +3,7 @@ services:
     restart: 'no'
     ports:
       - 8069:8069
+      - 8070:8070
       - 8071:8071
       - 8072:8072
 
@@ -18,19 +19,3 @@ services:
     restart: 'no'
     ports:
       - 80:80
-
-  pgadmin:
-    image: dpage/pgadmin4:7.1
-    restart: unless-stopped
-    expose:
-      - 80
-    volumes:
-      - pgadmin-data:${PGADMIN_DATA}
-    environment:
-      - PGADMIN_DEFAULT_EMAIL
-      - PGADMIN_DEFAULT_PASSWORD
-      - VIRTUAL_HOST=${PGADMIN_VIRTUAL_HOST}
-      - LETSENCRYPT_HOST=${PGADMIN_LETSENCRYPT_HOST}
-      - LETSENCRYPT_EMAIL
-    networks:
-      - internal

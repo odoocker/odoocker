@@ -3,3 +3,6 @@
 
 # Ignores the docker compose local or production environment.
 docker-compose.override.yml
+
+# Ignores any __pycache__ folder.
+__pycache__

@@ -35,7 +35,7 @@ defaults=(
     [HTTP_PORT]=${HTTP_PORT}
     [XMLRPCS_INTERFACE]=${XMLRPCS_INTERFACE}
     [XMLRPCS_PORT]=${XMLRPCS_PORT}
-    [GEVENT_PORT]=${GEVENT_PORT}
+    [LONGPOLLING_PORT]=${LONGPOLLING_PORT}
     [HTTP_ENABLE]=${HTTP_ENABLE}
     [XMLRPCS]=${XMLRPCS}
     [PROXY_MODE]=${PROXY_MODE}
@@ -86,7 +86,6 @@ defaults=(
     [LIST_DB]=${LIST_DB}
 
     [DEV_MODE]=${DEV_MODE}
-    [DEBUG_MODE]=${DEBUG_MODE}
     [SHELL_INTERFACE]=${SHELL_INTERFACE}
     [STOP_AFTER_INIT]=${STOP_AFTER_INIT}
     [OSV_MEMORY_COUNT_LIMIT]=${OSV_MEMORY_COUNT_LIMIT}
@@ -122,252 +121,248 @@ websocket_rate_limit_delay = {WEBSOCKET_RATE_LIMIT_DELAY}
 ;-----------------------;
 ; Server startup config ;
 ;-----------------------;
-; `--config | -c`
+; --config | -c
 config = {ODOO_RC}
 
-; `--save`
+; --save
 save = {SAVE}
 
-; `--init | -i`
+; --init | -i
 init = {INIT}
 
-; `--update | -u`
+; --update | -u
 update = {UPDATE}
 
-; `--without-demo`
+; --without-demo
 demo = {DEMO}
 without_demo = {WITHOUT_DEMO}
 
-; `--import-partial`
+; --import-partial
 import_partial = {IMPORT_PARTIAL}
 
-; `--pidfile`
+; --pidfile
 pidfile = {PIDFILE}
 
-; `--addons-path`
+; --addons-path
 addons_path = {ADDONS_PATH}
 
-; `--upgrade-path`
+; --upgrade-path
 upgrade_path = {UPGRADE_PATH}
 
-; `--load`
+; --load
 server_wide_modules = {SERVER_WIDE_MODULES}
 
-; `--data-dir`
+; --data-dir
 data_dir = {DATA_DIR}
 
 ;------;
 ; HTTP ;
 ;------;
-; `--http-interface | --xmlrpc-interface`
+; --http-interface | --xmlrpc-interface
 http_interface = {HTTP_INTERFACE}
 
-; `--http-port | -p | --xmlrpc-port`
+; --http-port | -p | --xmlrpc-port
 http_port = {HTTP_PORT}
 
-; `--xmlrpcs-interface`
+; --xmlrpcs-interface
 xmlrpcs_interface = {XMLRPCS_INTERFACE}
 
-; `--xmlrpcs-port`
+; --xmlrpcs-port
 xmlrpcs_port = {XMLRPCS_PORT}
 
-; `--gevent-port | --longpolling_port` (deprecated)
-gevent_port = {GEVENT_PORT}
-longpolling_port = 0
+; --longpolling_port
+longpolling_port = {LONGPOLLING_PORT}
 
-; `--no-http | --no-xmlrpc`
+; --no-http | --no-xmlrpc
 http_enable = {HTTP_ENABLE}
 
-; `--no-xmlrpcs`
+; --no-xmlrpcs
 xmlrpcs = {XMLRPCS}
 
-; `--proxy-mode`
+; --proxy-mode
 proxy_mode = {PROXY_MODE}
 
-; `--x-sendfile`
+; --x-sendfile
 x_sendfile = {X_SENDFILE}
 
 ;---------------;
 ; Testing Group ;
 ;---------------;
-; `--test-file`
+; --test-file
 test_file = {TEST_FILE}
 
-; `--test-enable`
+; --test-enable
 test_enable = {TEST_ENABLE}
 
-; `--test-tags`
+; --test-tags
 test_tags = {TEST_FILE}
 
-; `--screencasts`
+; --screencasts
 screencasts = {SCREENCASTS}
 
-; `--screenshots`
+; --screenshots
 screenshots = {SCREENSHOTS}
 
 ;---------------;
 ; Logging Group ;
 ;---------------;
-; `--logfile`
+; --logfile
 logfile = {LOGFILE}
 
-; `--syslog`
+; --syslog
 syslog = {SYSLOG}
 
-; `--log-handler | --log-web (--log-handler=odoo.http:DEBUG) | --log-sql (--log-handler=odoo.sql_db:DEBUG)`
+; --log-handler | --log-web (--log-handler=odoo.http:DEBUG) | --log-sql (--log-handler=odoo.sql_db:DEBUG)
 log_handler = {LOG_HANDLER}
 
-; `--log-db`
+; --log-db
 log_db = {LOG_DB}
 
-; `--log-db-level`
+; --log-db-level
 log_db_level = {LOG_DB_LEVEL}
 
-; `--log-level`
+; --log-level
 log_level = {LOG_LEVEL}
 
 ;------------;
 ; SMTP Group ;
 ;------------;
-; `--email-from`
+; --email-from
 email_from = {EMAIL_FROM}
 
-; `--from-filter`
+; --from-filter
 from_filter = {FROM_FILTER}
 
-; `--smtp`
+; --smtp
 smtp_server = {SMTP_SERVER}
 
-; `--smtp-port`
+; --smtp-port
 smtp_port = {SMTP_PORT}
 
-; `--smtp-ssl`
+; --smtp-ssl
 smtp_ssl = {SMTP_SSL}
 
-; `--smtp-user`
+; --smtp-user
 smtp_user = {SMTP_USER}
 
-; `--smtp-password`
+; --smtp-password
 smtp_password = {SMTP_PASSWORD}
 
-; `--smtp-ssl-certificate-filename`
+; --smtp-ssl-certificate-filename
 smtp_ssl_certificate_filename = {SMTP_SSL_CERTIFICATE_FILENAME}
 
-; `--smtp-ssl-private-key-filename`
+; --smtp-ssl-private-key-filename
 smtp_ssl_private_key_filename = {SMTP_SSL_PRIVATE_KEY_FILENAME}
 
 ;----------;
 ; DB Group ;
 ;----------;
-; `--database | -d`
+; --database | -d
 db_name = {DB_NAME}
 
-; `--db_user | -r`
+; --db_user | -r
 db_user = {DB_USER}
 
-; `--db_password | -w`
+; --db_password | -w
 db_password = {DB_PASSWORD}
 
-; `--pg_path`
+; --pg_path
 pg_path = {PG_PATH}
 
-; `--db_host`
+; --db_host
 db_host = {DB_HOST}
 
-; `--db_port`
+; --db_port
 db_port = {DB_PORT}
 
-; `--db_sslmode`
+; --db_sslmode
 db_sslmode = {DB_SSLMODE}
 
-; `--db_maxconn`
+; --db_maxconn
 db_maxconn = {DB_MAXCONN}
 
-; `--db-template`
+; --db-template
 db_template = {DB_TEMPLATE}
 
 ;------------------------------;
 ; Internationalisation options ;
 ;------------------------------;
-; `--load-language`
+; --load-language
 load_language = {LOAD_LANGUAGE}
 
-; `--language`
+; --language
 language = {LANGUAGE}
 
-; `--i18n-export`
+; --i18n-export
 translate_out = {TRANSLATE_OUT}
 
-; `--i18n-import`
+; --i18n-import
 translate_in = {TRANSLATE_IN}
 
-; `--i18n-overwrite`
+; --i18n-overwrite
 overwrite_existing_translations = {OVERWRITE_EXISTING_TRANSLATIONS}
 
-; `--modules `
+; --modules 
 translate_modules = {TRANSLATE_MODULES}
 
 ;----------;
 ; Security ;
 ;----------;
-; `--no-database-list`
+; --no-database-list
 list_db = {LIST_DB}
 
 ;-----;
 ; WEB ;
 ;-----;
-; `--db-filter`
+; --db-filter
 dbfilter = {DBFILTER}
 
 ;------------------;
 ; Advanced options ;
 ;------------------;
-; `--dev`
+; --dev
 dev_mode = {DEV_MODE}
 
-;
-debug_mode = {DEV_MODE}
-
-; `--shell-interface`
+; --shell-interface
 shell_interface = {SHELL_INTERFACE}
 
-; `--stop-after-init`
+; --stop-after-init
 stop_after_init = {STOP_AFTER_INIT}
 
-; `--osv-memory-count-limit`
+; --osv-memory-count-limit
 osv_memory_count_limit = {OSV_MEMORY_COUNT_LIMIT}
 
-; `--transient-age-limit | --osv-memory-age-limit` (deprecated)
+; --transient-age-limit | --osv-memory-age-limit (deprecated)
 transient_age_limit = {TRANSIENT_AGE_LIMIT}
 
-; `--max-cron-threads`
+; --max-cron-threads
 max_cron_threads = {MAX_CRON_THREADS}
 
-; `--unaccent`
+; --unaccent
 unaccent = {UNACCENT}
 
-; `--geoip-db`
+; --geoip-db
 geoip_database = {GEOIP_DATABASE}
 
-; `--workers`
+; --workers
 workers = {WORKERS}
 
-; `--limit-memory-soft`
+; --limit-memory-soft
 limit_memory_soft = {LIMIT_MEMORY_SOFT}
 
-; `--limit-memory-hard`
+; --limit-memory-hard
 limit_memory_hard = {LIMIT_MEMORY_HARD}
 
-; `--limit-time-cpu`
+; --limit-time-cpu
 limit_time_cpu = {LIMIT_TIME_CPU}
 
-; `--limit-time-real`
+; --limit-time-real
 limit_time_real = {LIMIT_TIME_REAL}
 
-; `--limit-time-real-cron`
+; --limit-time-real-cron
 limit_time_real_cron = {LIMIT_TIME_REAL_CRON}
 
-; `--limit-request`
+; --limit-request
 limit_request = {LIMIT_REQUEST}
 EOF
 )

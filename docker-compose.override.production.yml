@@ -7,10 +7,12 @@ services:
       - 127.0.0.1:8072:8072
 
   postgres:
+    restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
 
   nginx-proxy:
+    restart: unless-stopped
     ports:
       - 80:80
       - 443:443

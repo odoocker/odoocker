@@ -3,6 +3,15 @@ services:
     build:
       context: ./
       dockerfile: ./odoo/Dockerfile
+      args:
+        - ODOO_VERSION
+        - ODOO_RC
+        - ROOT_PATH
+        - GITHUB_USER
+        - GITHUB_ACCESS_TOKEN
+        - ENTERPRISE_REPO
+        - ENTERPRISE_ADDONS
+        - LOG_PATH
     depends_on:
       - postgres
     tty: true
@@ -35,7 +44,7 @@ services:
       - internal
 
   nginx:
-    image: nginx:1.24.0
+    image: nginx:1.25.1
     depends_on:
       - odoo
     restart: unless-stopped
@@ -54,7 +63,7 @@ services:
       - internal
 
   nginx-proxy:
-    image: nginxproxy/nginx-proxy:1.3.0
+    image: nginxproxy/nginx-proxy:1.3.1
     depends_on:
       - nginx
     restart: unless-stopped
@@ -78,7 +87,6 @@ volumes:
   certs:
   vhost:
   html:
-  pgadmin-data:
 
 networks:
   internal:

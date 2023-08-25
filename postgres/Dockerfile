@@ -1,13 +1,14 @@
-FROM postgres:15.2
-
-# Update apt packages
-RUN apt-get update && apt-get upgrade -y
+FROM postgres:15.3
 
 #------------------------#
 #    APT Dependencies    #
 #------------------------#
-# Unaccent extension dependencies
-RUN apt-get install -y postgresql-contrib
+# Update apt packages
+RUN apt-get update && apt-get install -y \
+    # Unaccent extension dependencies
+    postgresql-contrib \
+    # Clean up the apt cache to reduce the image size
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the script to create the unaccent template
 COPY ./entrypoint.sh /docker-entrypoint-initdb.d/entrypoint.sh
