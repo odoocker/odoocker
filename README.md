@@ -29,6 +29,8 @@ Welcome to Odoocker, a game-changer in the world of Odoo Development and Deploym
 
 **Best of all**, you don't need any prior knowledge of **Odoo** or **Docker** to start your journey with Odoocker.
 
+Feel free to post a Pull Request to continue enhancing this project.
+
 ### Why Odoocker Stands Out:
 
 1. **Minimalistic Server Approach**: In an era where less is more, we keep server clutter at bay. With Odoocker, you'll witness a decluttered server environment, stripped down to the bare essentials. This minimalism ensures optimal resource utilization, leading to faster response times, reduced chances of conflicts, and a smooth-running Odoo instance.
@@ -271,8 +273,8 @@ odoo
 ```
 git pull origin main
 ```
-6. Set `Staging` environment
-7. Set `Production` environment
+6. Set [`Staging`](#6-staging) environment
+7. Set [`Production`](#7-production) environment
 
 # Footnote
-This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) image. We've strived to ensure a seamless integration with the original Docker setup while making necessary customizations to suit our requirements. We encourage contributors and users to frequently refer to the official documentation for foundational concepts and updates. Thank you for your continued support and trust in our project."
+This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) image. We've strived to ensure a seamless integration with the original Docker setup while making necessary customizations to suit our requirements. We encourage contributors and users to frequently refer to the official documentation for foundational concepts and updates. Thank you for your continued support and trust in our project.
