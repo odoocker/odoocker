@@ -21,7 +21,7 @@
   - [DB Connection](#db-connection)
     - [PgAdmin Container](#pgadmin-container)
   - [Deployment Process](#deployment-process)
-  - [Final Note](#final-note)
+  - [Footnote](#footnote)
 
 # The Ultimate Odoo Docker Tool
 
