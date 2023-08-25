@@ -1,4 +1,4 @@
-## Table of Contents
+### Contents
 
 - [The Ultimate Odoo Docker Tool](#the-ultimate-odoo-docker-tool)
   - [Why Odoocker Stands Out](#why-odoocker-stands-out)
