@@ -10,9 +10,9 @@ Welcome to Odoocker, a game-changer in the world of Odoo Development and Deploym
 
 2. **Usability at its Core**: Odoocker is user-centric. By keeping the interface intuitive and the processes straightforward, we ensure that even newcomers to the Odoo ecosystem can set up and deploy with relative ease.
 
-3. **Dynamic Yet Simple Configuration**: Customization doesn't have to be complicated. With our .env setup, adapting your Odoo instance to your unique needs is a breeze, ensuring you have the flexibility without the fuss.
+3. **Dynamic Yet Simple Configuration**: Customization doesn't have to be complicated. With our `.env` setup, adapting your Odoo instance to your unique needs is a breeze, ensuring you have the flexibility without the fuss.
 
-4. **Streamlined Development Cycle**: With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3. The goal is clear: to ensure developers do what they love most, code. 
+4. **Streamlined Development Cycle**: With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3. The goal is clear: *to ensure developers do what they love most, code*. 
 
 5. **Clean, Unadulterated Performance**: With a spotlight on a single Odoo instance and a decluttered server, performance optimization is a given. Expect faster load times, smoother operations, and a user experience that’s top-notch.
 
