@@ -1,10 +1,10 @@
 # The Ultimate Odoo Docker Tool
 
-Welcome to Odoocker, the tool that redefines your Odoo Development and Deployment experience. With a focus on usability, flexibility, and a seamless development journey, this tool ensures that every developer spends more time building and less time troubleshooting. Minimalisticly designed to only need `git` and `docker` installed in your server (bye, bye fear of manual packaging update). This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) setup.
+Welcome to Odoocker, the tool that redefines your Odoo Development and Deployment experience. With a focus on usability, flexibility, and a seamless development journey, this tool ensures that every developer spends more time building and less time troubleshooting. This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) setup.
 
 ### What `Odoocker` brings to the table:
 
-1. **Ease of Setup**: No more fumbling through complex setups. Clone, copy a few files, update your hosts, and you’re set! We've streamlined the process to ensure a quick and hassle-free start.
+1. **Ease of Setup**: No more fumbling through complex setups. Clone, copy a few files, update your hosts, and you’re set! We've streamlined the process to ensure a quick and hassle-free start. Minimalistically designed, it only requires `git` and `docker` installed in your server. This means you can `update && upgrade` your server. Frees your mind of the fear of breaking Odoo with manual server updates.
 2. **Dynamic Configuration with .env**: Tailor your Odoo experience without sifting through a ton of documentation. The .env file, designed with clarity and structure, allows for easy adjustments and dynamic configurations.
 **3. Flexible Environment Actions**: Whether you’re diving deep into debugging or setting things up for a production run, `Odoocker` adapts seamlessly. Different environments, specific command-line values, and an array of configurations ensure you’re always in control.
 4. **Enhanced Development Experience**: We’ve packed in a bunch of Pro(d) Tips to supercharge your workflow. From defining powerful aliases, safeguarding against potential data loss, to colorizing your git branches – `Odoocker` is more than just a tool, it’s an experience.
