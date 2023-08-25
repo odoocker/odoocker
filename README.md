@@ -62,15 +62,15 @@ Here are the descriptions of each of them.
 - #### *Fresh* or *Restore*
 This environment (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
 
-#### *Local*:
+- #### *Local*:
 - This environment will strictly follow the `.env` variables with no command-line overwrites. You most likely be using this regularly.
 - Use `DEV_MODE=reload,qweb` to activate hot reload when changing `python` and `xml` files.
 - If you prefer to update the packages everytime you restart Odoo container, you can set `UPDATE=module1,module2,module3`.
 
-### *Debug*:
+- ### *Debug*:
 This environment works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
 
-#### *Testing*:
+- #### *Testing*:
 - This environment is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
 - A `test_DB_NAME` database is automagically created
 - The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
@@ -78,10 +78,10 @@ This environment works same way as local, but it starts Odoo using the `debugpy`
 
 *NOTE: Avoid running tests without tags*; this will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
 
-#### *Full*:
+- #### *Full*:
 This environment (`APP_ENV=full`) will install the `INIT` modules in a new or existing `DB_NAME`. This allows us to have a fresh production database replica.
 
-#### *Staging*:
+- #### *Staging*:
 This environment sets `UPDATE=all`; this allows us to *update* all installed addons at once.
 It also allows to install new packages before the upgrade through `INIT`.
 
@@ -95,7 +95,7 @@ This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons
 
 **NOTE: Do not bring down & up again unless you want to perform a whole update again.**
 
-#### *Production*:
+- #### *Production*:
 This is the production environment (`APP_ENV=production`). It ensures no demo data is loaded and debugging is turned off. It also brings up the `Let's Encrypt` container, so you won't worry about `SSL Certificates` anymore! Some `.env` variables are overwritten in this setup.
 
 - Take down previous setup containers
