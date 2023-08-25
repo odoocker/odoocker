@@ -1,18 +1,34 @@
-## Setup
-1. Clone the repository:
+# The Ultimate Odoo Docker Tool
+
+Welcome to odoocker, the tool that's poised to redefine your Odoo Docker experience. With a focus on usability, flexibility, and a seamless development journey, this tool ensures that every developer spends more time building and less time troubleshooting. This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) setup
+
+#### Here's what odoocker brings to the table:
+
+1. *Ease of Setup*: No more fumbling through complex setups. Clone, copy a few files, update your hosts, and you’re set! We've streamlined the process to ensure a quick and hassle-free start.
+2. *Dynamic Configuration with .env*: Tailor your Odoo experience without sifting through a ton of documentation. The .env file, designed with clarity and structure, allows for easy adjustments and dynamic configurations.
+*3. Flexible Environment Actions*: Whether you’re diving deep into debugging or setting things up for a production run, odoocker adapts seamlessly. Different environments, specific command-line values, and an array of configurations ensure you’re always in control.
+4. *Enhanced Development Experience*: We’ve packed in a bunch of Pro(d) Tips to supercharge your workflow. From defining powerful aliases, safeguarding against potential data loss, to colorizing your git branches – odoocker is more than just a tool, it’s an experience.
+5. *Streamlined Deployment*: No more lengthy, confusing deployment processes. With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3.
+
+We wish you a frictionless Odoo Docker experience with `odoocker`. Say goodbye to endless hours of debugging and embrace efficient development!
+
+Note: While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
+
+## Quick Setup Guide:
+
+1. Clone and Prep: Get your hands on this wonder-tool in seconds with a simple clone and a few copy commands:
 ```
 git clone git@github.com:yhaelopez/odoocker.git
-```
-2. Copy the `.env.example` and `docker-compose.override.local.yml`
-```
 cp .env.example .env && cp docker-compose.override.local.yml docker-compose.override.yml
 ```
-3. Manually add these domains to your `hosts` file
+2. Hosts & Domains: To ensure everything runs smoothly, remember to add the necessary domains to your hosts file.
+
+For Unix systems:
 ```
 echo '127.0.0.1 erp.odoocker.test' | sudo tee -a /etc/hosts
 echo '127.0.0.1 pgadmin.odoocker.test' | sudo tee -a /etc/hosts
 ```
-- For Windows, go to `C:\Windows\System32\drivers\etc\`, and add:
+For Windows, manually add these lines to C:\Windows\System32\drivers\etc\hosts:
 ```
 127.0.0.1 erp.odoocker.test
 127.0.0.1 pgadmin.odoocker.test
@@ -111,10 +127,10 @@ Rebuild the containers
 docker-compose up -d --build && docker-compose logs odoo
 ```
 
-# Pro(d) Tips
+## Pro(d) Tips
 The following tips will enhance your developing and production experience.
 
-### 1. Define the following aliases:
+#### 1. Define the following aliases:
 ```
 alias odoo='cd odoocker'
 
@@ -125,12 +141,12 @@ alias deploy='docker-compose down && git pull && docker-compose up -d --build &&
 alias logs='docker-compose logs -f --tail 2000 odoo'
 ```
 
-### 2. NEVER run `docker-compose down -v` in Production
+#### 2. NEVER run `docker-compose down -v` in Production
 ...without having a `tested backed up` database
 
 Have in mind that dropping volumes will destroy DB data, Odoo Conf & Filestore, *Let's Encrypt certificates, and more!*. If you execute this command several times in `prod` in a short period of time, you may reach the `Let's Encrypt` certificates limit and Odoocker won't be able to generate new ones after **several hours**.
 
-### 3. Colorize your branches
+#### 3. Colorize your branches
 Add the following to `~/.bashrc`
 ```
 # Color git branches
@@ -148,7 +164,7 @@ fi
 unset color_prompt force_color_prompt
 ```
 
-### 4. Odoo Shell
+#### 4. Odoo Shell
 1. Log into the odoo container
 ```
 docker-compose exec odoo bash
@@ -158,7 +174,7 @@ docker-compose exec odoo bash
 odoo shell --http-port=8071
 ```
 
-### 5. Odoo Scaffold
+#### 5. Odoo Scaffold
 1. Log into the odoo container
 ```
 docker-compose exec -u root odoo
@@ -173,10 +189,10 @@ odoo scaffold <addon_name>
 ```
 - The new addon will be available in the `odoo/custom_addons` folder in this project.
 
-# DB Connection
+## DB Connection
 - Any other Postgres Database Manager con connect to the DB using `.env` credentials.
 
-### PgAdmin Container
+#### PgAdmin Container
 - This project comes with a PgAdmin container which is loaded only in `docker-compose.override.pgadmin.yml`.
 In order to manage DB we provide a pgAdmin container.
 In order to bring this up, simply run:
@@ -190,7 +206,7 @@ docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-co
 
 If your instance has pgAdmin, make sure you adapt this to your aliases.
 
-# Deployment Process
+## Deployment Process
 Note: the deployment process is easier & faster with aliases.
 
 1. Backup the production Databases from `/web/database/manager`.
