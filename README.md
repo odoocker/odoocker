@@ -126,7 +126,7 @@ alias logs='docker-compose logs -f --tail 2000 odoo'
 ```
 
 ### 2. NEVER run `docker-compose down -v` in Production
-...without having a tested backed up database
+...without having a `tested backed up` database
 
 Have in mind that dropping volumes will destroy DB data, Odoo Conf & Filestore, *Let's Encrypt certificates, and more!*. If you execute this command several times in `prod` in a short period of time, you may reach the `Let's Encrypt` certificates limit and Odoocker won't be able to generate new ones after **several hours**.
 
@@ -176,7 +176,7 @@ odoo scaffold <addon_name>
 # DB Connection
 - Any other Postgres Database Manager con connect to the DB using `.env` credentials.
 
-## PgAdmin Container
+### PgAdmin Container
 - This project comes with a PgAdmin container which is loaded only in `docker-compose.override.pgadmin.yml`.
 In order to manage DB we provide a pgAdmin container.
 In order to bring this up, simply run:
