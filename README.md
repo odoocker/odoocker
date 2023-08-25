@@ -249,5 +249,5 @@ git pull origin main
 6. Set `Staging` environment
 7. Set `Production` environment
 
----
-This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) image.
+## Final Note
+This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) image. We've strived to ensure a seamless integration with the original Docker setup while making necessary customizations to suit our requirements. We encourage contributors and users to frequently refer to the official documentation for foundational concepts and updates. Thank you for your continued support and trust in our project."
