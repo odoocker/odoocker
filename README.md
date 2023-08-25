@@ -1,3 +1,30 @@
+# Table of Contents
+
+- [The Ultimate Odoo Docker Tool](#the-ultimate-odoo-docker-tool)
+  - [Why Odoocker Stands Out](#why-odoocker-stands-out)
+  - [Note](#note)
+- [Quick Setup Guide](#quick-setup-guide)
+  - [Clone and Prep](#clone-and-prep)
+  - [Hosts & Domains](#hosts-domains)
+- [The `.env` File](#the-env-file)
+  - [Environment-based actions](#environment-based-actions)
+    - [Fresh or Restore](#fresh-or-restore)
+    - [Local](#local)
+    - [Debug](#debug)
+    - [Testing](#testing)
+    - [Full](#full)
+    - [Staging](#staging)
+    - [Production](#production)
+- [Pro(d) Tips](#prodtips)
+  - [Define the following aliases](#define-the-following-aliases)
+  - [NEVER run `docker-compose down -v` in Production](#never-run-docker-compose-down-v-in-production)
+  - [Colorize your branches](#colorize-your-branches)
+  - [Odoo Shell](#odoo-shell)
+  - [Odoo Scaffold](#odoo-scaffold)
+- [DB Connection](#db-connection)
+  - [PgAdmin Container](#pgadmin-container)
+- [Deployment Process](#deployment-process)
+
 # The Ultimate Odoo Docker Tool
 
 Welcome to Odoocker, a game-changer in the world of Odoo Development and Deployment. This tool is meticulously crafted to revolutionize your experience with Odoo, ensuring simplicity, efficiency, and a top-tier development journey. And while it’s rooted in the principles of the Official Odoo Docker setup, it goes several steps beyond.
