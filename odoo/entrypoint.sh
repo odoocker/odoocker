@@ -18,9 +18,9 @@ case "$1" in
             fi
 
             if [ ${APP_ENV} = 'full' ] ; then
-                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INSTALLED_MODULES} --update= --load=${SERVER_WIDE_MODULES} --log-handler=${LOG_HANDLER} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --max-cron-threads=${MAX_CRON_THREADS} --limit-time-cpu=3600 --limit-time-real=7200 --workers=0 --without-demo=all
+                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update= --load=${SERVER_WIDE_MODULES} --log-handler=${LOG_HANDLER} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --max-cron-threads=${MAX_CRON_THREADS} --limit-time-cpu=3600 --limit-time-real=7200 --workers=0 --without-demo=all
 
-                exec odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INSTALLED_MODULES} --update= --load=${SERVER_WIDE_MODULES} --log-handler=${LOG_HANDLER} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --max-cron-threads=${MAX_CRON_THREADS} --limit-time-cpu=3600 --limit-time-real=7200 --workers=0 --without-demo=all
+                exec odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update= --load=${SERVER_WIDE_MODULES} --log-handler=${LOG_HANDLER} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --max-cron-threads=${MAX_CRON_THREADS} --limit-time-cpu=3600 --limit-time-real=7200 --workers=0 --without-demo=all
             fi
 
             if [ ${APP_ENV} = 'local' ] ; then
