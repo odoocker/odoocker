@@ -4,11 +4,11 @@ Welcome to odoocker, the tool that's poised to redefine your Odoo Docker experie
 
 #### Here's what odoocker brings to the table:
 
-1. *Ease of Setup*: No more fumbling through complex setups. Clone, copy a few files, update your hosts, and you’re set! We've streamlined the process to ensure a quick and hassle-free start.
-2. *Dynamic Configuration with .env*: Tailor your Odoo experience without sifting through a ton of documentation. The .env file, designed with clarity and structure, allows for easy adjustments and dynamic configurations.
-*3. Flexible Environment Actions*: Whether you’re diving deep into debugging or setting things up for a production run, odoocker adapts seamlessly. Different environments, specific command-line values, and an array of configurations ensure you’re always in control.
-4. *Enhanced Development Experience*: We’ve packed in a bunch of Pro(d) Tips to supercharge your workflow. From defining powerful aliases, safeguarding against potential data loss, to colorizing your git branches – odoocker is more than just a tool, it’s an experience.
-5. *Streamlined Deployment*: No more lengthy, confusing deployment processes. With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3.
+1. **Ease of Setup**: No more fumbling through complex setups. Clone, copy a few files, update your hosts, and you’re set! We've streamlined the process to ensure a quick and hassle-free start.
+2. **Dynamic Configuration with .env**: Tailor your Odoo experience without sifting through a ton of documentation. The .env file, designed with clarity and structure, allows for easy adjustments and dynamic configurations.
+**3. Flexible Environment Actions**: Whether you’re diving deep into debugging or setting things up for a production run, odoocker adapts seamlessly. Different environments, specific command-line values, and an array of configurations ensure you’re always in control.
+4. **Enhanced Development Experience**: We’ve packed in a bunch of Pro(d) Tips to supercharge your workflow. From defining powerful aliases, safeguarding against potential data loss, to colorizing your git branches – odoocker is more than just a tool, it’s an experience.
+5. **Streamlined Deployment**: No more lengthy, confusing deployment processes. With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3.
 
 We wish you a frictionless Odoo Docker experience with `odoocker`. Say goodbye to endless hours of debugging and embrace efficient development!
 
