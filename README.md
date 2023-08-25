@@ -52,9 +52,14 @@ DB_PASSWORD=odoo
 
 All environments receive the whole `.env` file variables. However, some of them have fixed command-line variables specific for each environment. For example, some of them may have `--limit-time-cpu=3600` because some databases are so big that may require a huge amount of seconds. Setting 1 hour ensures any DB can be imported (this can change as needed in the specific project). These values in command line overwrite the ones in the `.env` file.
 
-To bring up most of the following environments run `docker-compose down && docker-compose up -d --build && docker-compose logs odoo`. Here are the description of each of them.
+To bring up most of the following environments run:
+```
+docker-compose down && docker-compose up -d --build && docker-compose logs odoo
+```
 
-#### - *Fresh* or *Restore*
+Here are the descriptions of each of them.
+
+- #### *Fresh* or *Restore*
 This environment (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
 
 #### *Local*:
