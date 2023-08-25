@@ -71,8 +71,8 @@ If you prefer to update the packages everytime you restart Odoo container, you c
 This environment (`APP_ENV=debug`) works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
 
 #### 4. *Testing*:
-This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). - It help us test the modules we are developing to ensure a safe deployment.
-A `test_DB_NAME` database is automagically created
+This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). It help us test the modules we are developing to ensure a safe deployment.
+A `test_DB_NAME` database is automagically created.
 The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
 Use `TEST_TAGS=test_tag_1` to filter your tests.
 
