@@ -114,15 +114,15 @@ This will `pull` the latest *Odoo Community, Enterprise, Extra and Custom addons
 #### 7. Production:
 This is the production environment (`APP_ENV=production`). It ensures no demo data is loaded and debugging is turned off. It also brings up the `Let's Encrypt` container, so you won't worry about `SSL Certificates` anymore! Some `.env` variables are overwritten in this setup.
 
-Take down previous setup of containers
+- Take down previous setup of containers
 ```
 docker-compose down
 ```
-Replace the `docker-compose.override.yml` with `docker-compose.override.production.yml` to bring `Let's Encrypt` container.
+- Replace the `docker-compose.override.yml` with `docker-compose.override.production.yml` to bring `Let's Encrypt` container.
 ```
 cp docker-compose.override.production.yml docker-compose.override.yml
 ```
-Rebuild the containers
+- Rebuild the containers
 ```
 docker-compose up -d --build && docker-compose logs odoo
 ```
