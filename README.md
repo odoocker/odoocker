@@ -33,7 +33,7 @@ INIT=
 LOAD=base,web
 WORKERS=2
 
-# Enterprise (GitHub User with access to [Odoo Enterprise](https://github.com/odoo/enterprise) Repo)
+# Enterprise (GitHub User with access to Odoo Enterprise [https://github.com/odoo/enterprise] Repo)
 GITHUB_USER=yhaelopez
 GITHUB_ACCESS_TOKEN=ghp_token
 
@@ -54,7 +54,7 @@ All environments receive the whole `.env` file variables. However, some of them 
 
 To bring up most of the following environments run `docker-compose down && docker-compose up -d --build && docker-compose logs odoo`. Here are the description of each of them.
 
-#### *Fresh* or *Restore*
+#### - *Fresh* or *Restore*
 This environment (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
 
 #### *Local*:
