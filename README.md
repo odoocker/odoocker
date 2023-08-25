@@ -1,6 +1,6 @@
 # The Ultimate Odoo Docker Tool
 
-Welcome to Odoocker, the tool that's poised to redefine your Odoo Docker experience. With a focus on usability, flexibility, and a seamless development journey, this tool ensures that every developer spends more time building and less time troubleshooting. This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) setup.
+Welcome to Odoocker, the tool that redefines your Odoo Development and Deployment experience. With a focus on usability, flexibility, and a seamless development journey, this tool ensures that every developer spends more time building and less time troubleshooting. Minimalisticly designed to only need `git` and `docker` installed in your server (bye, bye fear of manual packaging update). This project is based on the [Official Odoo Docker](https://hub.docker.com/_/odoo/) setup.
 
 ### What `Odoocker` brings to the table:
 
@@ -12,23 +12,23 @@ Welcome to Odoocker, the tool that's poised to redefine your Odoo Docker experie
 
 We wish you a frictionless Odoo Docker experience with `Odoocker`. Say goodbye to endless hours of debugging and embrace efficient development!
 
-*Note:* While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
+**Note:** While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
 
 ## Quick Setup Guide:
 
-1. Clone and Prep: Get your hands on this wonder-tool in seconds with a simple clone and a few copy commands:
+1. **Clone and Prep**: Get your hands on this wonder-tool in seconds with a simple clone and a few copy commands:
 ```
 git clone git@github.com:yhaelopez/odoocker.git
 cp .env.example .env && cp docker-compose.override.local.yml docker-compose.override.yml
 ```
-2. Hosts & Domains: To ensure everything runs smoothly, remember to add the necessary domains to your hosts file.
+2. **Hosts & Domains**: To ensure everything runs smoothly, remember to add the necessary domains to your hosts file.
 
-For Unix systems:
+For *Unix*:
 ```
 echo '127.0.0.1 erp.odoocker.test' | sudo tee -a /etc/hosts
 echo '127.0.0.1 pgadmin.odoocker.test' | sudo tee -a /etc/hosts
 ```
-For Windows, manually add these lines to C:\Windows\System32\drivers\etc\hosts:
+For *Windows*, manually add these lines to C:\Windows\System32\drivers\etc\hosts:
 ```
 127.0.0.1 erp.odoocker.test
 127.0.0.1 pgadmin.odoocker.test
@@ -75,29 +75,29 @@ docker-compose down && docker-compose up -d --build && docker-compose logs odoo
 
 Here are the descriptions of each of them.
 
-#### 1. *Fresh* or *Restore*
+#### 1. Fresh or Restore
 These environments (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
 
-#### 2. *Local*:
+#### 2. Local:
 This environment (`APP_ENV=local`) will strictly follow the `.env` variables with no command-line overwrites. You'll most likely be using this regularly.
 Use `DEV_MODE=reload,qweb` to activate hot reload when changing `python` and `xml` files.
 If you prefer to update the packages everytime you restart Odoo container, you can set `UPDATE=module1,module2,module3`.
 
-#### 3. *Debug*:
+#### 3. Debug:
 This environment (`APP_ENV=debug`) works same way as local, but it starts Odoo using the `debugpy` library. Thanks to our [`.vscode/launch.json`](https://github.com/yhaelopez/odoocker/blob/main/.vscode/launch.json), if you are using Visual Studio Code, you start a Debugger session and the container will be aware of your breakpoints and stop wherever you need. This is my favorite environment to work since I use the debugger a lot while developing.
 
-#### 4. *Testing*:
+#### 4. Testing:
 This environment (`APP_ENV=testing`) is specific for running tests (and will be included in a CI/CD pipeline in a future version). It help us test the modules we are developing to ensure a safe deployment.
 A `test_DB_NAME` database is automagically created.
 The `ADDONS_TO_TEST=addon_1` are installed in that fresh DB.
 Use `TEST_TAGS=test_tag_1` to filter your tests.
 
-*NOTE: Avoid running tests without tags*; otherwise, it will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
+**NOTE: Avoid running tests without tags**; otherwise, it will trigger tests in all installed addons and we don't want this. For now let's assume Odoo Community & Enterprise tests passed and only focus on the things you need to test.
 
-#### 5. *Full*:
+#### 5. Full:
 This environment (`APP_ENV=full`) will install the `INIT` modules in a new or existing `DB_NAME`. This allows us to have a fresh production database replica.
 
-#### 6. *Staging*:
+#### 6. Staging:
 This environment (`APP_ENV=staging`) sets `UPDATE=all`; this allows us to *update* all installed addons at once.
 It also allows to install new packages before the upgrade through `INIT`.
 
@@ -192,7 +192,7 @@ odoo scaffold <addon_name>
 ## DB Connection
 - Any other Postgres Database Manager con connect to the DB using `.env` credentials.
 
-#### PgAdmin Container
+### PgAdmin Container
 - This project comes with a PgAdmin container which is loaded only in `docker-compose.override.pgadmin.yml`.
 In order to manage DB we provide a pgAdmin container.
 In order to bring this up, simply run:
