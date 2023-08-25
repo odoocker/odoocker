@@ -19,9 +19,8 @@
     - [4. Odoo Scaffold](#4-odoo-scaffold)
     - [5. Colorize your branches](#5-colorize-your-branches)
   - [DB Connection](#db-connection)
-    - [PgAdmin Container](#pgadmin-container)
+    - [PgAdmin](#pgadmin-container)
   - [Deployment Process](#deployment-process)
-  - [Footnote](#footnote)
 
 # The Ultimate Odoo Docker Tool
 
@@ -227,7 +226,7 @@ unset color_prompt force_color_prompt
 # DB Connection
 - Any other Postgres Database Manager can connect to the DB using the `.env` credentials.
 
-## PgAdmin Container
+## PgAdmin
 - This project comes with a PgAdmin container which is loaded only in `docker-compose.override.pgadmin.yml`.
 In order to manage DB we provide a pgAdmin container.
 In order to bring this up, simply run:
