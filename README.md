@@ -87,7 +87,7 @@ docker-compose down && docker-compose up -d --build && docker-compose logs odoo
 Here are the descriptions of each of them.
 
 #### 1. Fresh or Restore
-These environments (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and it's perfect for setting up a fresh database instance or restoring a production database.
+These environments (`APP_ENV=fresh` or `APP_ENV=restore`) will have no database created and are perfect for setting up a fresh database instance or restoring a production database.
 
 #### 2. Local:
 This environment (`APP_ENV=local`) will strictly follow the `.env` variables with no command-line overwrites. You'll most likely be using this regularly.
