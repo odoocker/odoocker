@@ -77,7 +77,6 @@ This file is divided in sections, you most likely are going to focus on the `Mai
 Sample `.env` file:
 ```
 # Odoo
-ODOO_VERSION=16.0
 UPDATE=custom_account_addon
 INIT=
 LOAD=base,web
@@ -163,6 +162,18 @@ docker-compose up -d --build && docker-compose logs odoo
 
 # Pro(d) Tips
 The following tips will enhance your developing and production experience.
+
+## 1. Search through Community, Enterprise, Extra & Custom Addons at once:
+If you are using `Visual Studio Code` & the Remote
+```
+alias odoo='cd odoocker'
+
+alias hard-deploy='docker-compose down && git pull && docker-compose pull && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f odoo'
+
+alias deploy='docker-compose down && git pull && docker-compose up -d --build && docker-compose logs -f --tail 2000 odoo'
+
+alias logs='docker-compose logs -f --tail 2000 odoo'
+```
 
 ## 1. Define the following aliases:
 ```

@@ -1,26 +1,25 @@
 #------------------------#
 #     Odoo Community     #
 #------------------------#
-ARG ODOO_VERSION
-FROM odoo:${ODOO_VERSION}
+ARG ODOO_TAG
+FROM odoo:${ODOO_TAG}
 
 # Switch to root user
 USER root
 
 # Receive ARGs from docker-compose.yml & convert them into ENVs
+ARG ODOO_TAG
 ARG ROOT_PATH
 ARG LOG_PATH
 ARG GITHUB_USER
 ARG GITHUB_ACCESS_TOKEN
-ARG ENTERPRISE_REPO
 ARG ENTERPRISE_ADDONS
 ARG ODOO_RC
 
-ENV ODOO_VERSION=${ODOO_VERSION} \
+ENV ODOO_TAG=${ODOO_TAG} \
     LOG_PATH=${LOG_PATH} \
     GITHUB_USER=${GITHUB_USER} \
     GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN} \
-    ENTERPRISE_REPO=${ENTERPRISE_REPO} \
     ENTERPRISE_ADDONS=${ENTERPRISE_ADDONS} \
     ODOO_RC=${ODOO_RC}
 
@@ -53,7 +52,7 @@ RUN mkdir -p ${ENTERPRISE_ADDONS} && \
 
 # Clone Enterprise addons if user and token are present
 RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
-        git clone ${ENTERPRISE_REPO} ${ENTERPRISE_ADDONS} --depth 1 --branch ${ODOO_VERSION} --single-branch --no-tags; \
+        git clone https://${GITHUB_USER}:${GITHUB_ACCESS_TOKEN}@github.com/odoo/enterprise.git ${ENTERPRISE_ADDONS} --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags; \
     fi
 
 #---------------------#
