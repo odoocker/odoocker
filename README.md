@@ -13,11 +13,12 @@
     - [6. Staging](#6-staging)
     - [7. Production](#7-production)
 - [Pro(d) Tips](#prod-tips)
-  - [1. Define the following aliases](#1-define-the-following-aliases)
-  - [2. NEVER run **docker-compose down -v** in Production](#2-never-run-docker-compose-down--v-in-production)
-  - [3. Odoo Shell](#3-odoo-shell)
-  - [4. Odoo Scaffold](#4-odoo-scaffold)
-  - [5. Colorize your branches](#5-colorize-your-branches)
+  - [1. Search through all Addons at once](#1-search-through-all-addons-at-once)
+  - [2. Define the following aliases](#2-define-the-following-aliases)
+  - [3. NEVER run **docker-compose down -v** in Production](#3-never-run-docker-compose-down--v-in-production)
+  - [4. Odoo Shell](#4-odoo-shell)
+  - [5. Odoo Scaffold](#5-odoo-scaffold)
+  - [6. Colorize your branches](#6-colorize-your-branches)
 - [DB Connection](#db-connection)
   - [PgAdmin](#pgadmin-container)
 - [Deployment Process](#deployment-process)
@@ -163,8 +164,10 @@ docker-compose up -d --build && docker-compose logs odoo
 # Pro(d) Tips
 The following tips will enhance your developing and production experience.
 
-## 1. Search through Community, Enterprise, Extra & Custom Addons at once:
-If you are using `Visual Studio Code` & the Remote
+## 1. Search through all Addons at once:
+If you are using `Visual Studio Code` & the Docker Extension is installed, you can open the Odoo Container in the `ROOT_PATH`. There you will find all Odoo `Community Addons`, `Enterprise Addons`, `Extra Addons` and `Custom Addons`. The Extra and Custom addons coming from your project.
+
+## 2. Define the following aliases:
 ```
 alias odoo='cd odoocker'
 
@@ -175,23 +178,12 @@ alias deploy='docker-compose down && git pull && docker-compose up -d --build &&
 alias logs='docker-compose logs -f --tail 2000 odoo'
 ```
 
-## 1. Define the following aliases:
-```
-alias odoo='cd odoocker'
-
-alias hard-deploy='docker-compose down && git pull && docker-compose pull && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f odoo'
-
-alias deploy='docker-compose down && git pull && docker-compose up -d --build && docker-compose logs -f --tail 2000 odoo'
-
-alias logs='docker-compose logs -f --tail 2000 odoo'
-```
-
-## 2. NEVER run `docker-compose down -v` in Production
+## 3. NEVER run `docker-compose down -v` in Production
 ...without having a `tested backed up` database
 
 Have in mind that dropping volumes will destroy DB data, Odoo Conf & Filestore, *Let's Encrypt certificates, and more!*. If you execute this command several times in `prod` in a short period of time, you may reach the `Let's Encrypt` certificates limit and Odoocker won't be able to generate new ones after **several hours**.
 
-## 3. Odoo Shell
+## 4. Odoo Shell
 1. Log into the odoo container
 ```
 docker-compose exec odoo bash
@@ -201,7 +193,7 @@ docker-compose exec odoo bash
 odoo shell --http-port=8071
 ```
 
-## 4. Odoo Scaffold
+## 5. Odoo Scaffold
 1. Log into the odoo container
 ```
 docker-compose exec -u root odoo
@@ -216,7 +208,7 @@ odoo scaffold <addon_name>
 ```
 - The new addon will be available in the `odoo/custom_addons` folder in this project.
 
-## 5. Colorize your branches
+## 6. Colorize your branches
 Add the following to `~/.bashrc`
 ```
 # Color git branches
