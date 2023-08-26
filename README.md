@@ -3,24 +3,24 @@
 - [The Ultimate Odoo Docker Tool](#the-ultimate-odoo-docker-tool)
   - [Why Odoocker Stands Out](#why-odoocker-stands-out)
   - [Quick Setup Guide](#quick-setup-guide)
-  - [The `.env` File](#the-env-file)
-    - [Environment-based actions](#environment-based-actions)
-      - [1. Fresh or Restore](#1-fresh-or-restore)
-      - [2. Local](#2-local)
-      - [3. Debug](#3-debug)
-      - [4. Testing](#4-testing)
-      - [5. Full](#5-full)
-      - [6. Staging](#6-staging)
-      - [7. Production](#7-production)
-  - [Pro(d) Tips](#prod-tips)
-    - [1. Define the following aliases](#1-define-the-following-aliases)
-    - [2. NEVER run **docker-compose down -v** in Production](#2-never-run-docker-compose-down--v-in-production)
-    - [3. Odoo Shell](#3-odoo-shell)
-    - [4. Odoo Scaffold](#4-odoo-scaffold)
-    - [5. Colorize your branches](#5-colorize-your-branches)
-  - [DB Connection](#db-connection)
-    - [PgAdmin](#pgadmin-container)
-  - [Deployment Process](#deployment-process)
+- [The `.env` File](#the-env-file)
+  - [Environment-based actions](#environment-based-actions)
+    - [1. Fresh or Restore](#1-fresh-or-restore)
+    - [2. Local](#2-local)
+    - [3. Debug](#3-debug)
+    - [4. Testing](#4-testing)
+    - [5. Full](#5-full)
+    - [6. Staging](#6-staging)
+    - [7. Production](#7-production)
+- [Pro(d) Tips](#prod-tips)
+  - [1. Define the following aliases](#1-define-the-following-aliases)
+  - [2. NEVER run **docker-compose down -v** in Production](#2-never-run-docker-compose-down--v-in-production)
+  - [3. Odoo Shell](#3-odoo-shell)
+  - [4. Odoo Scaffold](#4-odoo-scaffold)
+  - [5. Colorize your branches](#5-colorize-your-branches)
+- [DB Connection](#db-connection)
+  - [PgAdmin](#pgadmin-container)
+- [Deployment Process](#deployment-process)
 
 # The Ultimate Odoo Docker Tool
 
@@ -101,7 +101,7 @@ DB_PASSWORD=odoo
 
 All environments receive the whole `.env` file variables. However, some of them have fixed command-line variables specific for each environment. For example, some of them may have `--limit-time-cpu=3600` because some databases are so big that may require a huge amount of seconds. Setting 1 hour ensures any DB can be imported (this can change as needed in the specific project). These values in command line overwrite the ones in the `.env` file.
 
-To bring up most of the following environments run:
+**To bring up most of the following environments run**:
 ```
 docker-compose down && docker-compose up -d --build && docker-compose logs odoo
 ```
