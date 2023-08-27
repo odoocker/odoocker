@@ -1,8 +1,14 @@
-### Contents
+# Odoocker: The Ultimate Odoo Docker Framework
 
-- [The Ultimate Odoo Docker Tool](#the-ultimate-odoo-docker-tool)
-  - [Why Odoocker Stands Out](#why-odoocker-stands-out)
-  - [Quick Setup Guide](#quick-setup-guide)
+Welcome to Odoocker, a game-changer in the world of Odoo Development and Deployment. This tool is meticulously crafted to revolutionize your experience with Odoo, ensuring simplicity, efficiency, and a top-tier development journey. And while it’s rooted in the principles of the Official Odoo Docker setup, it goes several steps beyond.
+
+**Best of all**, you don't need any prior knowledge of **Odoo** or **Docker** to start your journey with Odoocker.
+
+Feel free to post a Pull Request to continue enhancing this project.
+
+## Contents
+
+- [Quick Setup Guide](#quick-setup-guide)
 - [The `.env` File](#the-env-file)
   - [Environment-based actions](#environment-based-actions)
     - [1. Fresh or Restore](#1-fresh-or-restore)
@@ -23,15 +29,7 @@
   - [PgAdmin](#pgadmin-container) 
 - [Deployment Process](#deployment-process)
 
-# The Ultimate Odoo Docker Tool
-
-Welcome to Odoocker, a game-changer in the world of Odoo Development and Deployment. This tool is meticulously crafted to revolutionize your experience with Odoo, ensuring simplicity, efficiency, and a top-tier development journey. And while it’s rooted in the principles of the Official Odoo Docker setup, it goes several steps beyond.
-
-**Best of all**, you don't need any prior knowledge of **Odoo** or **Docker** to start your journey with Odoocker.
-
-Feel free to post a Pull Request to continue enhancing this project.
-
-### Why Odoocker Stands Out:
+## Why Odoocker Stands Out:
 
 1. **Minimalistic Server Approach**: In an era where less is more, we keep server clutter at bay. With Odoocker, you'll witness a decluttered server environment, stripped down to the bare essentials. This minimalism ensures optimal resource utilization, leading to faster response times, reduced chances of conflicts, and a smooth-running Odoo instance.
 
@@ -78,10 +76,13 @@ This file is divided in sections, you most likely are going to focus on the `Mai
 Sample `.env` file:
 ```
 # Odoo
-UPDATE=custom_account_addon
+APP_ENV=debug
 INIT=
+UPDATE=my_custom_addon
 LOAD=base,web
 WORKERS=2
+DEV_MODE=reload,qweb
+DOMAIN=erp.odoocker.test
 
 # Enterprise (GitHub User with access to Odoo Enterprise [https://github.com/odoo/enterprise] Repo)
 GITHUB_USER=yhaelopez
@@ -94,6 +95,7 @@ DB_PORT=5432
 DB_NAME=my-odoo-db
 DB_USER=odoo
 DB_PASSWORD=odoo
+LOAD_LANGUAGE=es_MX
 ...
 ```
 
