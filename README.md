@@ -20,7 +20,7 @@
   - [5. Odoo Scaffold](#5-odoo-scaffold)
   - [6. Colorize your branches](#6-colorize-your-branches)
 - [DB Connection](#db-connection)
-  - [PgAdmin](#pgadmin-container)
+  - [PgAdmin](#pgadmin-container) 
 - [Deployment Process](#deployment-process)
 
 # The Ultimate Odoo Docker Tool
