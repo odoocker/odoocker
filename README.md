@@ -6,6 +6,24 @@ Welcome to Odoocker, a game-changer in the world of Odoo Development and Deploym
 
 Feel free to post a Pull Request to continue enhancing this project.
 
+### Why Odoocker Stands Out:
+
+1. **Minimalistic Server Approach**: In an era where less is more, we keep server clutter at bay. With Odoocker, you'll witness a decluttered server environment, stripped down to the bare essentials. This minimalism ensures optimal resource utilization, leading to faster response times, reduced chances of conflicts, and a smooth-running Odoo instance.
+
+2. **Usability at its Core**: Odoocker is user-centric. By keeping the interface intuitive and the processes straightforward, we ensure that even newcomers to the Odoo ecosystem can set up and deploy with relative ease.
+
+3. **Dynamic Yet Simple Configuration**: Customization doesn't have to be complicated. With our `.env` setup, adapting your Odoo instance to your unique needs is a breeze, ensuring you have the flexibility without the fuss.
+
+4. **Streamlined Development Cycle**: With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3. The goal is clear: *to ensure developers do what they love most, code*. 
+
+5. **Clean, Unadulterated Performance**: With a spotlight on a single Odoo instance and a decluttered server, performance optimization is a given. Expect faster load times, smoother operations, and a user experience that’s top-notch.
+
+In essence, Odoocker isn't just another tool in the developer's arsenal. It's a philosophy. A commitment to clean, efficient, and delightful Odoo development. So, whether you’re a seasoned Odoo veteran or just starting your journey, Odoocker is here to make sure it’s smooth sailing all the way.
+
+Note: We always recommend keeping abreast with the official documentation for the most detailed and updated insights. Knowledge is power, after all.
+
+**Note:** While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
+
 ## Contents
 
 - [Quick Setup Guide](#quick-setup-guide)
@@ -28,24 +46,6 @@ Feel free to post a Pull Request to continue enhancing this project.
 - [DB Connection](#db-connection)
   - [PgAdmin](#pgadmin-container) 
 - [Deployment Process](#deployment-process)
-
-## Why Odoocker Stands Out:
-
-1. **Minimalistic Server Approach**: In an era where less is more, we keep server clutter at bay. With Odoocker, you'll witness a decluttered server environment, stripped down to the bare essentials. This minimalism ensures optimal resource utilization, leading to faster response times, reduced chances of conflicts, and a smooth-running Odoo instance.
-
-2. **Usability at its Core**: Odoocker is user-centric. By keeping the interface intuitive and the processes straightforward, we ensure that even newcomers to the Odoo ecosystem can set up and deploy with relative ease.
-
-3. **Dynamic Yet Simple Configuration**: Customization doesn't have to be complicated. With our `.env` setup, adapting your Odoo instance to your unique needs is a breeze, ensuring you have the flexibility without the fuss.
-
-4. **Streamlined Development Cycle**: With our intuitive steps and tips, deploying Odoo becomes as simple as 1-2-3. The goal is clear: *to ensure developers do what they love most, code*. 
-
-5. **Clean, Unadulterated Performance**: With a spotlight on a single Odoo instance and a decluttered server, performance optimization is a given. Expect faster load times, smoother operations, and a user experience that’s top-notch.
-
-In essence, Odoocker isn't just another tool in the developer's arsenal. It's a philosophy. A commitment to clean, efficient, and delightful Odoo development. So, whether you’re a seasoned Odoo veteran or just starting your journey, Odoocker is here to make sure it’s smooth sailing all the way.
-
-Note: We always recommend keeping abreast with the official documentation for the most detailed and updated insights. Knowledge is power, after all.
-
-**Note:** While we've aimed to make things simpler, always refer to the official documentation for detailed information and updates. After all, knowledge is power!
 
 # Quick Setup Guide:
 
