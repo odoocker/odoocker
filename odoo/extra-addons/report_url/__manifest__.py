@@ -2,7 +2,7 @@
     'name': 'Report URL',
     'summary': 'Adds Report URL to Odoo Container',
     'description': '''
-        Odoo Containers doesn't come with report.url param out of the box, so we add it for you to work in Odoocker.
+        Odoo Containers doesn't come with report.url param out of the box, so we add it for you to work with Odoocker.
     ''',
     'version': '1.0.0',
     'category': 'Technical',
