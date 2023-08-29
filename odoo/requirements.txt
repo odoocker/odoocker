@@ -1,5 +1,2 @@
-jinja2
-sortedcontainers
 debugpy
 websocket-client
-pyOpenSSL
