@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- When initializing Odoo through Docker this parameter is missing. -->
+    <record id="report_url" model="ir.config_parameter">
+        <field name="key">report.url</field>
+        <field name="value">http://127.0.0.1:8069</field>
+    </record>
+</odoo>
