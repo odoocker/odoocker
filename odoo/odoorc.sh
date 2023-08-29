@@ -35,7 +35,7 @@ defaults=(
     [HTTP_PORT]=${HTTP_PORT}
     [XMLRPCS_INTERFACE]=${XMLRPCS_INTERFACE}
     [XMLRPCS_PORT]=${XMLRPCS_PORT}
-    [LONGPOLLING_PORT]=${LONGPOLLING_PORT}
+    [GEVENT_PORT]=${GEVENT_PORT}
     [HTTP_ENABLE]=${HTTP_ENABLE}
     [XMLRPCS]=${XMLRPCS}
     [PROXY_MODE]=${PROXY_MODE}
@@ -170,8 +170,9 @@ xmlrpcs_interface = {XMLRPCS_INTERFACE}
 ; --xmlrpcs-port
 xmlrpcs_port = {XMLRPCS_PORT}
 
-; --longpolling_port
-longpolling_port = {LONGPOLLING_PORT}
+; --gevent-port | --longpolling_port (deprecated)
+gevent_port = {GEVENT_PORT}
+longpolling_port = False
 
 ; --no-http | --no-xmlrpc
 http_enable = {HTTP_ENABLE}
