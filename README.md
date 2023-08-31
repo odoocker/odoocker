@@ -2,7 +2,7 @@
 
 Welcome to Odoocker, a game-changer in the world of Odoo Development and Deployment. This tool is meticulously crafted to revolutionize your experience with Odoo, ensuring simplicity, efficiency, and a top-tier development journey. And while it’s rooted in the principles of the Official Odoo Docker setup, it goes several steps beyond.
 
-Whether you're using the Community or Enterprise edition, this Docker solution is tailored just for you.
+Whether you're using the **Community** or **Enterprise** edition, this **Docker** solution is tailored just for you.
 
 **Best part of this?** You don't need any prior knowledge of **Docker**, **Odoo** or any technology that involves this Framework. We stick to Docker philosophy: **Use it, then learn about it.**
 
@@ -13,7 +13,7 @@ Feel free to post a Pull Request to continue enhancing this project.
 2. 📦 **Easy Setup:** Clone, configure `.env` file, and you're ready to deploy.
 3. 🔒 **Secure:** Automatic SSL certificate renewal to keep your data safe (for production only).
 
-In essence, Odoocker isn't just another tool, it's a philosophy. So, whether you’re a seasoned Odoo veteran or just starting your journey, Odoocker is here to make sure it’s smooth sailing all the way.
+In essence, Odoocker isn't just another tool, it's a philosophy. So, whether you’re a seasoned Odoo veteran or just starting your journey, Odoocker is here to make your journey easier.
 
 ## Contents
 
@@ -91,6 +91,7 @@ LOAD_LANGUAGE=es_MX
 ...
 ```
 <br>
+
 ## Environment-based actions:
 [`odoo/entrypoint.sh`](https://github.com/odoocker/odoocker/blob/main/odoo/entrypoint.sh) file is the gateway for our Odoo container. Depending on the `APP_ENV` and the rest of the environment variables, it determines how to start the Odoo service (like local, testing, production, etc.) with different configurations.
 <br>
