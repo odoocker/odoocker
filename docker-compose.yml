@@ -32,6 +32,7 @@ services:
       args:
         - POSTGRES_TAG
     restart: unless-stopped
+    shm_size: 1GB
     tty: true
     volumes:
       - pg-data:${PGDATA}
@@ -82,12 +83,26 @@ services:
     networks:
       - internal
 
+  keydb:
+    image: eqalpha/keydb:latest
+    platform: linux/amd64    
+    shm_size: 1GB
+    restart: unless-stopped
+    networks:
+      - internal
+    # command: keydb-server /etc/keydb/keydb.conf
+    volumes:
+      #- ./keydb.conf:/etc/keydb/keydb.conf:ro
+      - cache-db-data:/var/lib/keydb
+
 volumes:
   data-dir:
   pg-data:
   certs:
   vhost:
   html:
+  cache-db-data:
+
 
 networks:
   internal:
