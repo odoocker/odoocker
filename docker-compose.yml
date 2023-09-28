@@ -16,7 +16,7 @@ services:
       - postgres
     tty: true
     volumes:
-      - data-dir:${DATA_DIR}
+      - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
@@ -51,6 +51,17 @@ services:
       - PGADMIN_DB_PASSWORD
     networks:
       - internal
+
+  redis:
+    image: eqalpha/keydb:latest
+    platform: linux/amd64
+    ports:
+      - 6379:6379
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - redis-data:/var/lib/keydb
 
   nginx:
     image: nginx:${NGINX_TAG}
@@ -90,24 +101,13 @@ services:
     networks:
       - internal
 
-  redis:
-    image: eqalpha/keydb:latest
-    platform: linux/amd64
-    ports:
-      - 6379:6379
-    restart: unless-stopped
-    networks:
-      - internal
-    volumes:
-      - redis-data:/var/lib/keydb
-
 volumes:
-  data-dir:
+  odoo-data:
   pg-data:
+  redis-data:
   certs:
   vhost:
   html:
-  redis-data:
 
 networks:
   internal:
