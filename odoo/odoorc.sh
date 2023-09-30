@@ -100,6 +100,15 @@ defaults=(
     [LIMIT_TIME_REAL]=${LIMIT_TIME_REAL}
     [LIMIT_TIME_REAL_CRON]=${LIMIT_TIME_REAL_CRON}
     [LIMIT_REQUEST]=${LIMIT_REQUEST}
+
+    [ODOO_SESSION_REDIS]=${ODOO_SESSION_REDIS}
+    [ODOO_SESSION_REDIS_HOST]=${ODOO_SESSION_REDIS_HOST}
+    [ODOO_SESSION_REDIS_PORT]=${ODOO_SESSION_REDIS_PORT}
+    [ODOO_SESSION_REDIS_PASSWORD]=${ODOO_SESSION_REDIS_PASSWORD}
+    [ODOO_SESSION_REDIS_URL]=${ODOO_SESSION_REDIS_URL}
+    [ODOO_SESSION_REDIS_PREFIX]=${ODOO_SESSION_REDIS_PREFIX}
+    [ODOO_SESSION_REDIS_EXPIRATION]=${ODOO_SESSION_REDIS_EXPIRATION}
+    [ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS]=${ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS}
 )
 
 # Define the template
@@ -172,7 +181,6 @@ xmlrpcs_port = {XMLRPCS_PORT}
 
 ; --gevent-port | --longpolling_port (deprecated)
 gevent_port = {GEVENT_PORT}
-longpolling_port = False
 
 ; --no-http | --no-xmlrpc
 http_enable = {HTTP_ENABLE}
@@ -321,7 +329,7 @@ dbfilter = {DBFILTER}
 ;------------------;
 ; Advanced options ;
 ;------------------;
-; --dev
+; --dev (all, reload, xml, qweb, werkzeug, sql, shell, assets, tests)
 dev_mode = {DEV_MODE}
 
 ; --shell-interface
@@ -365,6 +373,38 @@ limit_time_real_cron = {LIMIT_TIME_REAL_CRON}
 
 ; --limit-request
 limit_request = {LIMIT_REQUEST}
+
+;-----------------------------;
+;    External Integrations    ;
+;-----------------------------;
+
+;-------------;
+;    Redis    ;
+;-------------;
+; -- Possible values: 1 or true
+ODOO_SESSION_REDIS = {ODOO_SESSION_REDIS}
+
+; -- Defaults to is localhost
+ODOO_SESSION_REDIS_HOST = {ODOO_SESSION_REDIS_HOST}
+
+; -- Defaults to 6379
+ODOO_SESSION_REDIS_PORT = {ODOO_SESSION_REDIS_PORT}
+
+; -- Sets the password for the AUTH command (optional)
+ODOO_SESSION_REDIS_PASSWORD = {ODOO_SESSION_REDIS_PASSWORD}
+
+; -- Alternative way to define the Redis server address like rediss:// protocol.
+ODOO_SESSION_REDIS_URL = {ODOO_SESSION_REDIS_URL}
+
+; -- Prefix for the session keys (optional)
+ODOO_SESSION_REDIS_PREFIX = {ODOO_SESSION_REDIS_PREFIX}
+
+; -- Time in seconds before expiration of the sessions (default is 7 days)
+ODOO_SESSION_REDIS_EXPIRATION = {ODOO_SESSION_REDIS_EXPIRATION}
+
+; -- Time in seconds before expiration of the anonymous sessions (default is 3 hours)
+ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS = {ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS}
+
 EOF
 )
 

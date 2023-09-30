@@ -14,6 +14,7 @@ ARG LOG_PATH
 ARG GITHUB_USER
 ARG GITHUB_ACCESS_TOKEN
 ARG ENTERPRISE_ADDONS
+ARG THIRD_PARTY_ADDONS
 ARG ODOO_RC
 
 ENV ODOO_TAG=${ODOO_TAG} \
@@ -21,6 +22,7 @@ ENV ODOO_TAG=${ODOO_TAG} \
     GITHUB_USER=${GITHUB_USER} \
     GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN} \
     ENTERPRISE_ADDONS=${ENTERPRISE_ADDONS} \
+    THIRD_PARTY_ADDONS=${THIRD_PARTY_ADDONS} \
     ODOO_RC=${ODOO_RC}
 
 #------------------------#
@@ -55,6 +57,16 @@ RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
         git clone https://${GITHUB_USER}:${GITHUB_ACCESS_TOKEN}@github.com/odoo/enterprise.git ${ENTERPRISE_ADDONS} --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags; \
     fi
 
+#-------------------------#
+#    Odoo Extra Addons    #
+#-------------------------#
+
+RUN mkdir -p ${THIRD_PARTY_ADDONS} && \
+    chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
+
+COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
+RUN /third-party-addons.sh && chown odoo:odoo ${THIRD_PARTY_ADDONS}
+
 #---------------------#
 #   PIP Dependecies   #
 #---------------------#
@@ -64,7 +76,7 @@ RUN pip3 install --upgrade pip
 # Copy & Install PIP requirements
 COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
 
-RUN python3 -m pip install --upgrade -r /tmp/requirements.txt && \
+RUN python3 -m pip install -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
 #---------------------#

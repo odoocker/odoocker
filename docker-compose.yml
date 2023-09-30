@@ -10,16 +10,18 @@ services:
         - GITHUB_USER
         - GITHUB_ACCESS_TOKEN
         - ENTERPRISE_ADDONS
+        - THIRD_PARTY_ADDONS
         - LOG_PATH
     depends_on:
       - postgres
     tty: true
     volumes:
-      - data-dir:${DATA_DIR}
+      - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
       - ./odoo/odoorc.sh:/odoorc.sh
+      - ./odoo/third-party-addons.sh:/third-party-addons.sh
     env_file:
       - ./.env
     networks:
@@ -27,8 +29,8 @@ services:
 
   postgres:
     build: 
-      context: ./postgres
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./postgres/Dockerfile
       args:
         - POSTGRES_TAG
     restart: unless-stopped
@@ -41,8 +43,25 @@ services:
       - POSTGRES_USER
       - POSTGRES_PASSWORD
       - PGDATA
+      - DB_USER
+      - DB_TEMPLATE
+      - UNACCENT_TEMPLATE
+      - PGADMING_DB_NAME
+      - PGADMING_DB_USER
+      - PGADMIN_DB_PASSWORD
     networks:
       - internal
+
+  redis:
+    image: eqalpha/keydb:latest
+    platform: linux/amd64
+    ports:
+      - 6379:6379
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - redis-data:/var/lib/keydb
 
   nginx:
     image: nginx:${NGINX_TAG}
@@ -83,8 +102,9 @@ services:
       - internal
 
 volumes:
-  data-dir:
+  odoo-data:
   pg-data:
+  redis-data:
   certs:
   vhost:
   html:

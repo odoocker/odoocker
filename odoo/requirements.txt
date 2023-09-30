@@ -1,2 +1,3 @@
 debugpy
 websocket-client
+redis

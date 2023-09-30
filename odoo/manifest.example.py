@@ -48,6 +48,11 @@
         # ... other qweb templates
     ],
     'assets': {
+        'web.assets_frontend': [
+            'module_name/static/src/js/file.js',
+            'module_name/static/src/css/style.css'
+            # ... other assets
+        ],
         'web.assets_backend': [
             'module_name/static/src/js/file.js',
             'module_name/static/src/css/style.css'
