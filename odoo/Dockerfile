@@ -77,7 +77,7 @@ RUN mkdir -p ${THIRD_PARTY_ADDONS} && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
 COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
-RUN /third-party-addons.sh && chown odoo:odoo ${THIRD_PARTY_ADDONS}
+RUN /third-party-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 #---------------------#
 #       Logging       #

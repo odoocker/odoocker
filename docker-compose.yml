@@ -52,11 +52,16 @@ services:
       - PGADMING_DB_NAME
       - PGADMING_DB_USER
       - PGADMIN_DB_PASSWORD
+      - AWS_HOST
+      - AWS_REGION
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_BUCKETNAME
     networks:
       - internal
 
   redis:
-    image: eqalpha/keydb:latest
+    image: eqalpha/keydb:${REDIS_TAG}
     platform: linux/amd64
     ports:
       - 6379:6379
@@ -67,16 +72,16 @@ services:
       - redis-data:/var/lib/keydb
 
   s3:
-    image: minio/minio:latest
+    image: minio/minio:${S3_TAG}
     environment:
       - MINIO_ROOT_USER
       - MINIO_ROOT_PASSWORD
       - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
-      - VIRTUAL_PORT=${MINIO_VIRTUAL_PORT}
+      - VIRTUAL_PORT=9001
       - MINIO_BROWSER_REDIRECT_URL
     command: server /data --console-address ":9001"
     volumes:
-      - s3_data:/data
+      - s3-data:/data
     ports:
       - 9000:9000
       - 9001:9001
@@ -125,7 +130,7 @@ volumes:
   odoo-data:
   pg-data:
   redis-data:
-  s3_data:
+  s3-data:
   certs:
   vhost:
   html:
