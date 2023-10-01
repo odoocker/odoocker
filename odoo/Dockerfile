@@ -44,6 +44,18 @@ RUN apt-get update && apt-get install -y \
     # Clean up the apt cache to reduce the image size
     && rm -rf /var/lib/apt/lists/*
 
+#---------------------#
+#   PIP Dependecies   #
+#---------------------#
+# Upgrade pip
+RUN pip3 install --upgrade pip
+
+# Copy & Install PIP requirements
+COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
+
+RUN python3 -m pip install -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+
 #-----------------------#
 #    Odoo Enterprise    #
 #-----------------------#
@@ -66,18 +78,6 @@ RUN mkdir -p ${THIRD_PARTY_ADDONS} && \
 
 COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
 RUN /third-party-addons.sh && chown odoo:odoo ${THIRD_PARTY_ADDONS}
-
-#---------------------#
-#   PIP Dependecies   #
-#---------------------#
-# Upgrade pip
-RUN pip3 install --upgrade pip
-
-# Copy & Install PIP requirements
-COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
-
-RUN python3 -m pip install -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
 
 #---------------------#
 #       Logging       #

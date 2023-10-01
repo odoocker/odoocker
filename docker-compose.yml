@@ -63,6 +63,23 @@ services:
     volumes:
       - redis-data:/var/lib/keydb
 
+  s3:
+    image: minio/minio:latest
+    environment:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
+      - VIRTUAL_PORT=${MINIO_VIRTUAL_PORT}
+      - MINIO_BROWSER_REDIRECT_URL
+    command: server /data --console-address ":9001"
+    volumes:
+      - s3_data:/data
+    ports:
+      - 9000:9000
+      - 9001:9001
+    networks:
+      - internal
+
   nginx:
     image: nginx:${NGINX_TAG}
     depends_on:
@@ -105,6 +122,7 @@ volumes:
   odoo-data:
   pg-data:
   redis-data:
+  s3_data:
   certs:
   vhost:
   html:

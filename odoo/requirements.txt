@@ -1,3 +1,4 @@
 debugpy
 websocket-client
 redis
+boto3
