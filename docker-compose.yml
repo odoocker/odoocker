@@ -20,8 +20,6 @@ services:
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
-      - ./odoo/odoorc.sh:/odoorc.sh
-      - ./odoo/third-party-addons.sh:/third-party-addons.sh
     env_file:
       - ./.env
     networks:
