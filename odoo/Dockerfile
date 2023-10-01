@@ -73,8 +73,7 @@ RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
 #    Odoo Extra Addons    #
 #-------------------------#
 
-RUN mkdir -p ${THIRD_PARTY_ADDONS} && \
-    chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
+RUN mkdir -p ${THIRD_PARTY_ADDONS} && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
 COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
@@ -93,6 +92,7 @@ RUN touch ${LOG_PATH} && chown odoo:odoo ${LOG_PATH}
 
 # Copy environment variables & script to generate odoo.conf
 COPY --chown=odoo:odoo ./.env /
+COPY --chown=odoo:odoo ./odoo/odoo.conf /
 COPY --chown=odoo:odoo ./odoo/odoorc.sh /
 
 # Generate odoo.conf

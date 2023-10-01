@@ -20,8 +20,13 @@ services:
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
-    env_file:
-      - ./.env
+    environment:
+      - HOST=${DB_HOST}
+      - PORT=${DB_PORT}
+      - USER=${DB_USER}
+      - PASSWORD=${DB_PASSWORD}
+      - ODOO_TAG
+      - THIRD_PARTY_ADDONS
     networks:
       - internal
 

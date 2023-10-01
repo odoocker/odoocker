@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -e
+
 # Check if the repository directory exists
 if [ ! -d "odoo-cloud-platform" ]; then
     git clone https://github.com/camptocamp/odoo-cloud-platform.git --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags;
