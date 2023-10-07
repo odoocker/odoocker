@@ -16,6 +16,5 @@ redis_manifest="${THIRD_PARTY_ADDONS}/session_redis/__manifest__.py"
 s3_manifest="${THIRD_PARTY_ADDONS}/attachment_s3/__manifest__.py"
 
 # Modify the manifest file
-# python3 /fix-manifest.py $redis_manifest
-python3 /fix-manifest.py $s3_manifest
 python3 /fix-manifest.py $redis_manifest
+python3 /fix-manifest.py $s3_manifest
