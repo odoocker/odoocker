@@ -33,6 +33,9 @@ services:
       - ODOO_SESSION_REDIS_PASSWORD
       - ODOO_SESSION_REDIS_URL
       - ODOO_SESSION_REDIS_PREFIX
+      - ODOO_SESSION_REDIS_SENTINEL_MASTER_NAME
+      - ODOO_SESSION_REDIS_SENTINEL_HOST
+      - ODOO_SESSION_REDIS_SENTINEL_PORT
       - ODOO_SESSION_REDIS_EXPIRATION
       - ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS
       - AWS_HOST
@@ -69,18 +72,18 @@ services:
       - internal
 
   redis:
-    image: eqalpha/keydb:${REDIS_TAG}
+    image: eqalpha/keydb:${KEYDB_TAG}
     platform: linux/amd64
     ports:
-      - ${REDIS_PORT}:${REDIS_PORT}
+      - ${KEYDB_PORT}:${KEYDB_PORT}
     restart: unless-stopped
     volumes:
-      - redis-data:${REDIS_DATA}
+      - redis-data:${KEYDB_DATA}
     networks:
       - internal
 
   s3:
-    image: minio/minio:${S3_TAG}
+    image: minio/minio:${MINIO_TAG}
     environment:
       - MINIO_ROOT_USER
       - MINIO_ROOT_PASSWORD

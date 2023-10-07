@@ -15,13 +15,3 @@ if [ ! -d "server-tools" ]; then
     git clone https://github.com/odoocker/server-tools.git --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags;
     cp -r server-tools/sentry ${THIRD_PARTY_ADDONS}/sentry
 fi
-
-# Define the path to the manifest files
-redis_manifest="${THIRD_PARTY_ADDONS}/session_redis/__manifest__.py"
-s3_manifest="${THIRD_PARTY_ADDONS}/attachment_s3/__manifest__.py"
-sentry_manifest="${THIRD_PARTY_ADDONS}/sentry/__manifest__.py"
-
-# Modify the manifest files
-# python3 /fix-manifest.py $redis_manifest
-# python3 /fix-manifest.py $s3_manifest
-# python3 /fix-manifest.py $sentry_manifest
