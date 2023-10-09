@@ -44,6 +44,18 @@ RUN apt-get update && apt-get install -y \
     # Clean up the apt cache to reduce the image size
     && rm -rf /var/lib/apt/lists/*
 
+#---------------------#
+#   PIP Dependecies   #
+#---------------------#
+# Upgrade pip
+RUN pip3 install --upgrade pip
+
+# Copy & Install PIP requirements
+COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
+
+RUN python3 -m pip install -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+
 #-----------------------#
 #    Odoo Enterprise    #
 #-----------------------#
@@ -61,23 +73,11 @@ RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
 #    Odoo Extra Addons    #
 #-------------------------#
 
-RUN mkdir -p ${THIRD_PARTY_ADDONS} && \
-    chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
+RUN mkdir -p ${THIRD_PARTY_ADDONS} && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
+COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
 COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
-RUN /third-party-addons.sh && chown odoo:odoo ${THIRD_PARTY_ADDONS}
-
-#---------------------#
-#   PIP Dependecies   #
-#---------------------#
-# Upgrade pip
-RUN pip3 install --upgrade pip
-
-# Copy & Install PIP requirements
-COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
-
-RUN python3 -m pip install -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
+RUN /third-party-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 #---------------------#
 #       Logging       #
@@ -92,6 +92,7 @@ RUN touch ${LOG_PATH} && chown odoo:odoo ${LOG_PATH}
 
 # Copy environment variables & script to generate odoo.conf
 COPY --chown=odoo:odoo ./.env /
+COPY --chown=odoo:odoo ./odoo/odoo.conf /
 COPY --chown=odoo:odoo ./odoo/odoorc.sh /
 
 # Generate odoo.conf

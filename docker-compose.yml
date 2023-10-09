@@ -20,10 +20,26 @@ services:
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
-      - ./odoo/odoorc.sh:/odoorc.sh
-      - ./odoo/third-party-addons.sh:/third-party-addons.sh
-    env_file:
-      - ./.env
+    environment:
+      - HOST=${DB_HOST}
+      - PORT=${DB_PORT}
+      - USER=${DB_USER}
+      - PASSWORD=${DB_PASSWORD}
+      - ODOO_TAG
+      - THIRD_PARTY_ADDONS
+      - ODOO_SESSION_REDIS
+      - ODOO_SESSION_REDIS_HOST
+      - ODOO_SESSION_REDIS_PORT
+      - ODOO_SESSION_REDIS_PASSWORD
+      - ODOO_SESSION_REDIS_URL
+      - ODOO_SESSION_REDIS_PREFIX
+      - ODOO_SESSION_REDIS_EXPIRATION
+      - ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS
+      - AWS_HOST
+      - AWS_REGION
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_BUCKETNAME
     networks:
       - internal
 
@@ -53,15 +69,32 @@ services:
       - internal
 
   redis:
-    image: eqalpha/keydb:latest
+    image: eqalpha/keydb:${REDIS_TAG}
     platform: linux/amd64
     ports:
-      - 6379:6379
+      - ${REDIS_PORT}:${REDIS_PORT}
     restart: unless-stopped
+    volumes:
+      - redis-data:${REDIS_DATA}
     networks:
       - internal
+
+  s3:
+    image: minio/minio:${S3_TAG}
+    environment:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - MINIO_BROWSER_REDIRECT_URL
+      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
+      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
+    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
     volumes:
-      - redis-data:/var/lib/keydb
+      - s3-data:${MINIO_DATA}
+    ports:
+      - ${MINIO_API_PORT}:${MINIO_API_PORT}
+      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    networks:
+      - internal
 
   nginx:
     image: nginx:${NGINX_TAG}
@@ -105,6 +138,7 @@ volumes:
   odoo-data:
   pg-data:
   redis-data:
+  s3-data:
   certs:
   vhost:
   html:
