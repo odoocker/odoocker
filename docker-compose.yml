@@ -12,8 +12,10 @@ services:
         - ENTERPRISE_ADDONS
         - THIRD_PARTY_ADDONS
         - LOG_PATH
-    depends_on:
-      - postgres
+    ports:
+      - 8069:8069
+      - 8071:8071
+      - 8072:8072
     tty: true
     volumes:
       - odoo-data:${DATA_DIR}
@@ -25,6 +27,7 @@ services:
       - PORT=${DB_PORT}
       - USER=${DB_USER}
       - PASSWORD=${DB_PASSWORD}
+      - ODOO_RC
       - ODOO_TAG
       - THIRD_PARTY_ADDONS
       - ODOO_SESSION_REDIS
@@ -46,59 +49,6 @@ services:
     networks:
       - internal
 
-  postgres:
-    build: 
-      context: ./
-      dockerfile: ./postgres/Dockerfile
-      args:
-        - POSTGRES_TAG
-    restart: unless-stopped
-    tty: true
-    volumes:
-      - pg-data:${PGDATA}
-      - ./postgres/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh
-    environment:
-      - POSTGRES_DB
-      - POSTGRES_USER
-      - POSTGRES_PASSWORD
-      - PGDATA
-      - DB_USER
-      - DB_TEMPLATE
-      - UNACCENT_TEMPLATE
-      - PGADMING_DB_NAME
-      - PGADMING_DB_USER
-      - PGADMIN_DB_PASSWORD
-    networks:
-      - internal
-
-  redis:
-    image: eqalpha/keydb:${KEYDB_TAG}
-    platform: linux/amd64
-    ports:
-      - ${KEYDB_PORT}:${KEYDB_PORT}
-    restart: unless-stopped
-    volumes:
-      - redis-data:${KEYDB_DATA}
-    networks:
-      - internal
-
-  s3:
-    image: minio/minio:${MINIO_TAG}
-    environment:
-      - MINIO_ROOT_USER
-      - MINIO_ROOT_PASSWORD
-      - MINIO_BROWSER_REDIRECT_URL
-      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
-      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
-    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
-    volumes:
-      - s3-data:${MINIO_DATA}
-    ports:
-      - ${MINIO_API_PORT}:${MINIO_API_PORT}
-      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
-    networks:
-      - internal
-
   nginx:
     image: nginx:${NGINX_TAG}
     depends_on:
@@ -112,8 +62,8 @@ services:
       - ./nginx/default.conf:${NGINX_DEFAULT_CONF}
     environment:
       - VIRTUAL_HOST
-      - LETSENCRYPT_HOST
-      - LETSENCRYPT_EMAIL
+      # - LETSENCRYPT_HOST
+      # - LETSENCRYPT_EMAIL
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
@@ -123,6 +73,9 @@ services:
     depends_on:
       - nginx
     restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
     tty: true
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
@@ -137,11 +90,25 @@ services:
     networks:
       - internal
 
+  # letsencrypt:
+  #   image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
+  #   depends_on:
+  #     - nginx-proxy
+  #   restart: unless-stopped
+  #   volumes_from:
+  #     - nginx-proxy:rw
+  #   volumes:
+  #     - certs:${NGINX_CERTS}:rw
+  #     - acme:${NGINX_ACME}
+  #     - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
+  #   environment:
+  #     - DEFAULT_EMAIL
+  #   networks:
+  #     - internal
+
 volumes:
   odoo-data:
-  pg-data:
-  redis-data:
-  s3-data:
+  acme:
   certs:
   vhost:
   html:
