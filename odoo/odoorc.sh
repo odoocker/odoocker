@@ -21,7 +21,6 @@ while IFS='=' read -r key value || [[ -n $key ]]; do
 done < .env
 
 # Copy the example conf to the destination to start replacing the variables
-echo "$TEMPLATE_CONF" "$ODOO_RC"
 cp "$TEMPLATE_CONF" "$ODOO_RC"
 
 # Second pass: Replace the variables in $ODOO_RC

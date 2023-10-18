@@ -15,5 +15,3 @@ if [ ! -d "server-tools" ]; then
     git clone https://github.com/odoocker/server-tools.git --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags;
     cp -r server-tools/sentry ${THIRD_PARTY_ADDONS}/sentry
 fi
-
-chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
