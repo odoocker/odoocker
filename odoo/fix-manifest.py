@@ -16,7 +16,7 @@ manifest_dict = eval(''.join(lines[start_index:end_index + 1]))
 
 # Modify the manifest dictionary
 manifest_dict['installable'] = True
-manifest_dict['auto_install'] = False
+manifest_dict['auto_install'] = True
 
 # Construct the modified manifest string
 modified_manifest_lines = ['{\n']
