@@ -26,6 +26,7 @@ services:
       - USER=${DB_USER}
       - PASSWORD=${DB_PASSWORD}
       - ODOO_TAG
+      - ODOO_RC
       - THIRD_PARTY_ADDONS
       - ODOO_SESSION_REDIS
       - ODOO_SESSION_REDIS_HOST
