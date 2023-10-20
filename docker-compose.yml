@@ -14,8 +14,9 @@ services:
         - ENTERPRISE_ADDONS
         - THIRD_PARTY_ADDONS
         - LOG_PATH
-    depends_on:
-      - postgres
+        - USE_REDIS
+        - USE_S3
+        - USE_SENTRY
     tty: true
     volumes:
       - odoo-data:${DATA_DIR}
@@ -161,6 +162,8 @@ services:
       - acme:${NGINX_ACME}
       - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
     environment:
+      - ACME_CA_URI
+      - CERTS_UPDATE_INTERVAL
       - DEFAULT_EMAIL
     networks:
       - internal

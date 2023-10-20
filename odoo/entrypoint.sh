@@ -25,14 +25,14 @@ case "$1" in
 
             if [ ${APP_ENV} = 'fresh' ] || [ ${APP_ENV} = 'restore' ]; then
                 # Ideal for a fresh install or restore a production database.
-                echo odoo --config ${ODOO_RC} --database= --init= --update= --load=${SERVER_WIDE_MODULES} --log-level=${LOG_LEVEL} --load-language= --workers=0 --limit-time-cpu=3600 --limit-time-real=7200
+                echo odoo --config ${ODOO_RC} --database= --init= --update= --load=${LOAD} --log-level=${LOG_LEVEL} --load-language= --workers=0 --limit-time-cpu=3600 --limit-time-real=7200
 
                 exec odoo --config ${ODOO_RC} --database= --init= --update= --load-language= --workers=0 --limit-time-cpu=3600 --limit-time-real=7200
             fi
 
             if [ ${APP_ENV} = 'local' ] ; then
                 # Listens to all .env variables mapped into odoo.conf file.
-                echo odoo --config ${ODOO_RC}
+                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=${UPDATE} --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --dev=${DEV_MODE}
 
                 exec odoo --config ${ODOO_RC}
             fi
@@ -46,21 +46,21 @@ case "$1" in
 
             if [ ${APP_ENV} = 'testing' ] ; then
                 # Initializies a fresh 'test_*' database, installs the addons to test, and runs tests you specify in the test tags.
-                echo odoo --config ${ODOO_RC} --database=test_${DB_NAME} --test-enable --test-tags ${TEST_TAGS} --init=${ADDONS_TO_TEST} --update=${ADDONS_TO_TEST} --load=${SERVER_WIDE_MODULES} --log-level=${LOG_LEVEL} --without-demo= --workers=0 --dev= --stop-after-init
+                echo odoo --config ${ODOO_RC} --database=test_${DB_NAME} --test-enable --test-tags ${TEST_TAGS} --init=${ADDONS_TO_TEST} --update=${ADDONS_TO_TEST} --load=${LOAD} --log-level=${LOG_LEVEL} --without-demo= --workers=0 --dev= --stop-after-init
 
                 exec odoo --config ${ODOO_RC} --database=test_${DB_NAME} --test-enable --test-tags ${TEST_TAGS} --init=${ADDONS_TO_TEST} --update=${ADDONS_TO_TEST} --without-demo= --workers=0 --dev= --stop-after-init
             fi
 
             if [ ${APP_ENV} = 'staging' ] ; then
                 # Automagically upgrade all addons and install new ones. Ideal for deployment process.
-                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=all --load=${SERVER_WIDE_MODULES} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --limit-time-cpu=3600 --limit-time-real=7200 --dev=
+                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=all --load=${LOAD} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --limit-time-cpu=3600 --limit-time-real=7200 --dev=
 
                 exec odoo --config ${ODOO_RC} --update=all --without-demo=all --workers=0 --limit-time-cpu=3600 --limit-time-real=7200 --dev=
             fi
 
             if [ ${APP_ENV} = 'production' ] ; then
                 # Bring up Odoo ready for production.
-                echo odoo --config ${ODOO_RC} --database= --init= --update= --load=${SERVER_WIDE_MODULES} --workers=${WORKERS} --log-level=${LOG_LEVEL} --load-language= --without-demo=all --dev=
+                echo odoo --config ${ODOO_RC} --database= --init= --update= --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --load-language= --without-demo=all --dev=
 
                 exec odoo --config ${ODOO_RC} --database= --init= --update= --load-language= --without-demo=all --dev=
             fi
