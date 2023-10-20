@@ -1,6 +1,6 @@
 services:
   odoo:
-    restart: 'no'
+    restart: unless-stopped
     ports:
       - 127.0.0.1:8069:8069
       - 127.0.0.1:8070:8070
@@ -8,15 +8,15 @@ services:
       - 127.0.0.1:8072:8072
 
   postgres:
-    restart: 'no'
+    restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
 
   nginx:
-    restart: 'no'
+    restart: unless-stopped
 
   nginx-proxy:
-    restart: 'no'
+    restart: unless-stopped
     ports:
       - 80:80
       - 443:443
