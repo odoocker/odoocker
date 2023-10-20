@@ -1,3 +1,5 @@
+
+
 services:
   odoo:
     build:
@@ -12,8 +14,9 @@ services:
         - ENTERPRISE_ADDONS
         - THIRD_PARTY_ADDONS
         - LOG_PATH
-    depends_on:
-      - postgres
+        - USE_REDIS
+        - USE_S3
+        - USE_SENTRY
     tty: true
     volumes:
       - odoo-data:${DATA_DIR}
@@ -27,6 +30,9 @@ services:
       - PASSWORD=${DB_PASSWORD}
       - ODOO_TAG
       - ODOO_RC
+      - USE_REDIS
+      - USE_S3
+      - USE_SENTRY
       - THIRD_PARTY_ADDONS
       - ODOO_SESSION_REDIS
       - ODOO_SESSION_REDIS_HOST
@@ -46,6 +52,7 @@ services:
       - AWS_BUCKETNAME
     networks:
       - internal
+    profiles: [$ODOO_PROFILES]
 
   postgres:
     build: 
@@ -71,34 +78,7 @@ services:
       - PGADMIN_DB_PASSWORD
     networks:
       - internal
-
-  redis:
-    image: eqalpha/keydb:${KEYDB_TAG}
-    platform: linux/amd64
-    ports:
-      - ${KEYDB_PORT}:${KEYDB_PORT}
-    restart: unless-stopped
-    volumes:
-      - redis-data:${KEYDB_DATA}
-    networks:
-      - internal
-
-  s3:
-    image: minio/minio:${MINIO_TAG}
-    environment:
-      - MINIO_ROOT_USER
-      - MINIO_ROOT_PASSWORD
-      - MINIO_BROWSER_REDIRECT_URL
-      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
-      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
-    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
-    volumes:
-      - s3-data:${MINIO_DATA}
-    ports:
-      - ${MINIO_API_PORT}:${MINIO_API_PORT}
-      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
-    networks:
-      - internal
+    profiles: [$POSTGRES_PROFILES]
 
   nginx:
     image: nginx:${NGINX_TAG}
@@ -118,6 +98,7 @@ services:
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
+    profiles: [$NGINX_PROFILES]
 
   nginx-proxy:
     image: nginxproxy/nginx-proxy:${NGINX_PROXY_TAG}
@@ -128,24 +109,119 @@ services:
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
       - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
-      - certs:${NGINX_CERTS}:ro
-      - vhost:${NGINX_VHOST}
       - html:${NGINX_HTML}
+      - vhost:${NGINX_VHOST}
+      - certs:${NGINX_CERTS}:ro
       - ${DOCKER_SOCK}:${TEMP_DOCKER_SOCK}:ro
     environment:
       - TRUST_DOWNSTREAM_PROXY
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
+    profiles: [$NGINX_PROXY_PROFILES]
+
+  redis:
+    image: eqalpha/keydb:${KEYDB_TAG}
+    platform: linux/amd64
+    ports:
+      - ${KEYDB_PORT}:${KEYDB_PORT}
+    restart: unless-stopped
+    volumes:
+      - redis-data:${KEYDB_DATA}
+    networks:
+      - internal
+    profiles: [$KEYDB_PROFILES]
+
+  s3:
+    image: minio/minio:${MINIO_TAG}
+    environment:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - MINIO_BROWSER_REDIRECT_URL
+      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
+      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
+    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
+    volumes:
+      - s3-data:${MINIO_DATA}
+    ports:
+      - ${MINIO_API_PORT}:${MINIO_API_PORT}
+      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    networks:
+      - internal
+    profiles: [$MINIO_PROFILES]
+
+  letsencrypt:
+    image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
+    depends_on:
+      - nginx-proxy
+    restart: unless-stopped
+    volumes_from:
+      - nginx-proxy:rw
+    volumes:
+      - certs:${NGINX_CERTS}:rw
+      - acme:${NGINX_ACME}
+      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
+    environment:
+      - ACME_CA_URI
+      - CERTS_UPDATE_INTERVAL
+      - DEFAULT_EMAIL
+    networks:
+      - internal
+    profiles: [$ACME_COMPANION_PROFILES]
+
+  pgadmin:
+    build:
+      context: ./
+      dockerfile: ./pgadmin/Dockerfile
+      args:
+        - PGADMIN_TAG
+    depends_on:
+      - postgres
+    restart: 'no'
+    expose:
+      - 80
+    volumes:
+      - pgadmin-data:${PGADMIN_DATA}
+    environment:
+      - PGADMIN_DEFAULT_EMAIL
+      - PGADMIN_DEFAULT_PASSWORD
+      - VIRTUAL_HOST=${PGADMIN_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${PGADMIN_LETSENCRYPT_HOST}
+      - LETSENCRYPT_EMAIL=${PGADMIN_LETSENCRYPT_EMAIL}
+      - PGADMIN_CONFIG_APP_NAME
+      - PGADMIN_CONFIG_CONFIG_DATABASE_CONNECTION_POOL_SIZE
+      - PGADMIN_CONFIG_SERVER_MODE
+      - PGADMIN_CONFIG_DEFAULT_SERVER
+      - PGADMIN_CONFIG_DEFAULT_SERVER_PORT
+      - PGADMIN_CONFIG_PASSWORD_LENGTH_MIN
+      - PGADMIN_CONFIG_MAX_SESSION_IDLE_TIME
+      - PGADMIN_CONFIG_CONFIG_DATABASE_URI
+      - PGADMIN_CONFIG_ALLOW_SAVE_PASSWORD
+      - PGADMIN_CONFIG_MAX_QUERY_HIST_STORED
+      - PGADMIN_CONFIG_MAIL_SERVER
+      - PGADMIN_CONFIG_MAIL_PORT
+      - PGADMIN_CONFIG_MAIL_USE_SSL
+      - PGADMIN_CONFIG_MAIL_USE_TLS
+      - PGADMIN_CONFIG_MAIL_USERNAME
+      - PGADMIN_CONFIG_MAIL_PASSWORD
+      - PGADMIN_CONFIG_MAIL_DEBUG
+      - PGADMIN_CONFIG_SECURITY_EMAIL_SENDER
+      - PGADMIN_CONFIG_ALLOW_SAVE_TUNNEL_PASSWORD
+      - PGADMIN_CONFIG_MAX_LOGIN_ATTEMPTS
+    networks:
+      - internal
+    profiles: [$PGADMIN_PROFILES]
 
 volumes:
   odoo-data:
   pg-data:
   redis-data:
   s3-data:
-  certs:
-  vhost:
+  pgadmin-data:
   html:
+  vhost:
+  certs:
+  acme:
 
 networks:
   internal:

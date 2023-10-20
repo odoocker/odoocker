@@ -19,3 +19,4 @@ services:
     restart: 'no'
     ports:
       - 80:80
+      - 443:443
