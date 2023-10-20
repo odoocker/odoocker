@@ -16,12 +16,12 @@ done < .env
 
 # Check the USE_REDIS to add base_attachment_object_storage & session_redis to LOAD variable
 if [[ $USE_REDIS == "true" ]]; then
-    LOAD+=",base_attachment_object_storage"
     LOAD+=",session_redis"
 fi
 
 # Check the USE_REDIS to add attachment_s3 to LOAD variable
 if [[ $USE_S3 == "true" ]]; then
+    LOAD+=",base_attachment_object_storage"
     LOAD+=",attachment_s3"
 fi
 
