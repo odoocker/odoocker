@@ -14,6 +14,23 @@ while IFS='=' read -r key value || [[ -n $key ]]; do
     eval "$key=\"$value\""
 done < .env
 
+
+# Check the USE_REDIS variable to decide whether to copy Redis directories
+if [[ $USE_REDIS == "true" ]]; then
+    LOAD+=",base_attachment_object_storage"
+    LOAD+=",session_redis"
+fi
+
+# Check the USE_S3 variable to decide whether to copy S3 directories
+if [[ $USE_S3 == "true" ]]; then
+    LOAD+=",attachment_s3"
+fi
+
+# Check if the repository directory exists and Sentry is to be used
+if [[ $USE_SENTRY == "true" ]]; then
+    LOAD+=",sentry"
+fi
+
 case "$1" in
     -- | odoo)
         shift

@@ -27,15 +27,14 @@ fi
 
 # Check the USE_S3 variable to decide whether to copy S3 directories
 if [[ $USE_S3 == "true" ]]; then
-    LOAD+=",base_attachment_object_storage,attachment_s3"
+    LOAD+=",base_attachment_object_storage"
+    LOAD+=",attachment_s3"
 fi
 
 # Check if the repository directory exists and Sentry is to be used
 if [[ $USE_SENTRY == "true" ]]; then
     LOAD+=",sentry"
 fi
-
-echo "Loading addons: $LOAD"
 
 # Copy the example conf to the destination to start replacing the variables
 cp "$TEMPLATE_CONF" "$ODOO_RC"
