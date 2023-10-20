@@ -14,19 +14,18 @@ while IFS='=' read -r key value || [[ -n $key ]]; do
     eval "$key=\"$value\""
 done < .env
 
-
-# Check the USE_REDIS variable to decide whether to copy Redis directories
+# Check the USE_REDIS to add base_attachment_object_storage & session_redis to LOAD variable
 if [[ $USE_REDIS == "true" ]]; then
     LOAD+=",base_attachment_object_storage"
     LOAD+=",session_redis"
 fi
 
-# Check the USE_S3 variable to decide whether to copy S3 directories
+# Check the USE_REDIS to add attachment_s3 to LOAD variable
 if [[ $USE_S3 == "true" ]]; then
     LOAD+=",attachment_s3"
 fi
 
-# Check if the repository directory exists and Sentry is to be used
+# Check the USE_REDIS to add sentry to LOAD variable
 if [[ $USE_SENTRY == "true" ]]; then
     LOAD+=",sentry"
 fi
