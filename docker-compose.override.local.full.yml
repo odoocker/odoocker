@@ -1,0 +1,49 @@
+services:
+  odoo:
+    restart: 'no'
+    ports:
+      - 8069:8069
+      - 8070:8070
+      - 8071:8071
+      - 8072:8072
+
+  postgres:
+    restart: 'no'
+    ports:
+      - 5432:5432
+
+  nginx:
+    restart: 'no'
+
+  nginx-proxy:
+    restart: 'no'
+    ports:
+      - 80:80
+
+  redis:
+    image: eqalpha/keydb:${KEYDB_TAG}
+    platform: linux/amd64
+    ports:
+      - ${KEYDB_PORT}:${KEYDB_PORT}
+    restart: unless-stopped
+    volumes:
+      - redis-data:${KEYDB_DATA}
+    networks:
+      - internal
+
+  s3:
+    image: minio/minio:${MINIO_TAG}
+    environment:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - MINIO_BROWSER_REDIRECT_URL
+      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
+      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
+    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
+    volumes:
+      - s3-data:${MINIO_DATA}
+    ports:
+      - ${MINIO_API_PORT}:${MINIO_API_PORT}
+      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    networks:
+      - internal

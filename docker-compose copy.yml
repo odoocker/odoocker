@@ -1,5 +1,3 @@
-
-
 services:
   odoo:
     build:
@@ -29,9 +27,6 @@ services:
       - PASSWORD=${DB_PASSWORD}
       - ODOO_TAG
       - ODOO_RC
-      - USE_REDIS
-      - USE_S3
-      - USE_SENTRY
       - THIRD_PARTY_ADDONS
       - ODOO_SESSION_REDIS
       - ODOO_SESSION_REDIS_HOST
@@ -77,6 +72,34 @@ services:
     networks:
       - internal
 
+  redis:
+    image: eqalpha/keydb:${KEYDB_TAG}
+    platform: linux/amd64
+    ports:
+      - ${KEYDB_PORT}:${KEYDB_PORT}
+    restart: unless-stopped
+    volumes:
+      - redis-data:${KEYDB_DATA}
+    networks:
+      - internal
+
+  s3:
+    image: minio/minio:${MINIO_TAG}
+    environment:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - MINIO_BROWSER_REDIRECT_URL
+      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
+      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
+    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
+    volumes:
+      - s3-data:${MINIO_DATA}
+    ports:
+      - ${MINIO_API_PORT}:${MINIO_API_PORT}
+      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    networks:
+      - internal
+
   nginx:
     image: nginx:${NGINX_TAG}
     depends_on:
@@ -105,9 +128,9 @@ services:
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
       - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
-      - html:${NGINX_HTML}
-      - vhost:${NGINX_VHOST}
       - certs:${NGINX_CERTS}:ro
+      - vhost:${NGINX_VHOST}
+      - html:${NGINX_HTML}
       - ${DOCKER_SOCK}:${TEMP_DOCKER_SOCK}:ro
     environment:
       - TRUST_DOWNSTREAM_PROXY
@@ -115,44 +138,14 @@ services:
     networks:
       - internal
 
-  redis:
-    image: eqalpha/keydb:${KEYDB_TAG}
-    platform: linux/amd64
-    ports:
-      - ${KEYDB_PORT}:${KEYDB_PORT}
-    restart: unless-stopped
-    volumes:
-      - redis-data:${KEYDB_DATA}
-    networks:
-      - internal
-    profiles: ["dev"]
-
-  s3:
-    image: minio/minio:${MINIO_TAG}
-    environment:
-      - MINIO_ROOT_USER
-      - MINIO_ROOT_PASSWORD
-      - MINIO_BROWSER_REDIRECT_URL
-      - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
-      - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
-    command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
-    volumes:
-      - s3-data:${MINIO_DATA}
-    ports:
-      - ${MINIO_API_PORT}:${MINIO_API_PORT}
-      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
-    networks:
-      - internal
-    profiles: ["dev"]
-
 volumes:
   odoo-data:
   pg-data:
   redis-data:
   s3-data:
-  html:
-  vhost:
   certs:
+  vhost:
+  html:
 
 networks:
   internal:
