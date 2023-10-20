@@ -173,8 +173,6 @@ services:
       dockerfile: ./pgadmin/Dockerfile
       args:
         - PGADMIN_TAG
-    depends_on:
-      - postgres
     restart: 'no'
     expose:
       - 80

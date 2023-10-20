@@ -19,9 +19,6 @@ DIR_NAME="/var/lib/pgadmin/storage/${PGADMIN_DEFAULT_EMAIL//@/_}"
 # Create the directory using the modified name
 mkdir -p "$DIR_NAME"
 
-cp /pgadmin4/private_key "$DIR_NAME/private_key"
-chown -R pgadmin:root "$DIR_NAME/private_key"
-
 # Generate JSON for each matching variable
 DB_PATH="/var/lib/pgadmin/pgadmin4.db"
 json_output="{\"Servers\":{"
