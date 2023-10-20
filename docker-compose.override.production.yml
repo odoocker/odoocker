@@ -17,22 +17,6 @@ services:
       - 80:80
       - 443:443
 
-  letsencrypt:
-    image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
-    depends_on:
-      - nginx-proxy
-    restart: unless-stopped
-    volumes_from:
-      - nginx-proxy:rw
-    volumes:
-      - certs:${NGINX_CERTS}:rw
-      - acme:${NGINX_ACME}
-      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
-    environment:
-      - DEFAULT_EMAIL
-    networks:
-      - internal
-
 volumes:
   acme:
   certs:

@@ -51,6 +51,7 @@ services:
       - AWS_BUCKETNAME
     networks:
       - internal
+    profiles: [$ODOO_PROFILES]
 
   postgres:
     build: 
@@ -76,6 +77,7 @@ services:
       - PGADMIN_DB_PASSWORD
     networks:
       - internal
+    profiles: [$POSTGRES_PROFILES]
 
   nginx:
     image: nginx:${NGINX_TAG}
@@ -95,6 +97,7 @@ services:
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
+    profiles: [$NGINX_PROFILES]
 
   nginx-proxy:
     image: nginxproxy/nginx-proxy:${NGINX_PROXY_TAG}
@@ -114,6 +117,7 @@ services:
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
+    profiles: [$NGINX_PROXY_PROFILES]
 
   redis:
     image: eqalpha/keydb:${KEYDB_TAG}
@@ -125,7 +129,7 @@ services:
       - redis-data:${KEYDB_DATA}
     networks:
       - internal
-    profiles: ["dev"]
+    profiles: [$KEYDB_PROFILES]
 
   s3:
     image: minio/minio:${MINIO_TAG}
@@ -143,16 +147,78 @@ services:
       - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
     networks:
       - internal
-    profiles: ["dev"]
+    profiles: [$MINIO_PROFILES]
+
+  letsencrypt:
+    image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
+    depends_on:
+      - nginx-proxy
+    restart: unless-stopped
+    volumes_from:
+      - nginx-proxy:rw
+    volumes:
+      - certs:${NGINX_CERTS}:rw
+      - acme:${NGINX_ACME}
+      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
+    environment:
+      - DEFAULT_EMAIL
+    networks:
+      - internal
+    profiles: [$ACME_COMPANION_PROFILES]
+
+  pgadmin:
+    build:
+      context: ./
+      dockerfile: ./pgadmin/Dockerfile
+      args:
+        - PGADMIN_TAG
+    depends_on:
+      - postgres
+    restart: 'no'
+    expose:
+      - 80
+    volumes:
+      - pgadmin-data:${PGADMIN_DATA}
+    environment:
+      - PGADMIN_DEFAULT_EMAIL
+      - PGADMIN_DEFAULT_PASSWORD
+      - VIRTUAL_HOST=${PGADMIN_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${PGADMIN_LETSENCRYPT_HOST}
+      - LETSENCRYPT_EMAIL=${PGADMIN_LETSENCRYPT_EMAIL}
+      - PGADMIN_CONFIG_APP_NAME
+      - PGADMIN_CONFIG_CONFIG_DATABASE_CONNECTION_POOL_SIZE
+      - PGADMIN_CONFIG_SERVER_MODE
+      - PGADMIN_CONFIG_DEFAULT_SERVER
+      - PGADMIN_CONFIG_DEFAULT_SERVER_PORT
+      - PGADMIN_CONFIG_PASSWORD_LENGTH_MIN
+      - PGADMIN_CONFIG_MAX_SESSION_IDLE_TIME
+      - PGADMIN_CONFIG_CONFIG_DATABASE_URI
+      - PGADMIN_CONFIG_ALLOW_SAVE_PASSWORD
+      - PGADMIN_CONFIG_MAX_QUERY_HIST_STORED
+      - PGADMIN_CONFIG_MAIL_SERVER
+      - PGADMIN_CONFIG_MAIL_PORT
+      - PGADMIN_CONFIG_MAIL_USE_SSL
+      - PGADMIN_CONFIG_MAIL_USE_TLS
+      - PGADMIN_CONFIG_MAIL_USERNAME
+      - PGADMIN_CONFIG_MAIL_PASSWORD
+      - PGADMIN_CONFIG_MAIL_DEBUG
+      - PGADMIN_CONFIG_SECURITY_EMAIL_SENDER
+      - PGADMIN_CONFIG_ALLOW_SAVE_TUNNEL_PASSWORD
+      - PGADMIN_CONFIG_MAX_LOGIN_ATTEMPTS
+    networks:
+      - internal
+    profiles: [$PGADMIN_PROFILES]
 
 volumes:
   odoo-data:
   pg-data:
   redis-data:
   s3-data:
+  pgadmin-data:
   html:
   vhost:
   certs:
+  acme:
 
 networks:
   internal:
