@@ -1,6 +1,6 @@
 ### :rocket: Deployment
 - `INIT="my_custom_addon_1"`
-- `ADDONS_TO_UPGRADE="my_custom_addon_2"`
+- `UPDATE="my_custom_addon_2"`
 
 ### :jigsaw: Odoo/Asana Tasks
 - *Paste Task URL*
