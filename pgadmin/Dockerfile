@@ -15,9 +15,12 @@ USER root
 # Install bash
 RUN apk add --no-cache bash jq sqlite
 
-# Conditionally copy the private key if it exists
-COPY --chown=pgadmin:root ./pgadmin/private_key /pgadmin4/private_key
-# Set permissions for the private key
+# Check if the private key exists, copy it and set permissions if it does
+RUN if [ -f ./pgadmin/private_key ]; then \
+        cp ./pgadmin/private_key /pgadmin4/private_key && \
+        chown pgadmin:root /pgadmin4/private_key && \
+        chmod 600 /pgadmin4/private_key; \
+    fi
 
 # Copy your script file into the Docker image
 COPY --chown=pgadmin:root ./.env /
