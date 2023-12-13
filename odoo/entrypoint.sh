@@ -50,7 +50,7 @@ case "$1" in
                 # Listens to all .env variables mapped into odoo.conf file.
                 echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=${UPDATE} --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --dev=${DEV_MODE}
 
-                exec odoo --config ${ODOO_RC}
+                exec odoo --config ${ODOO_RC} --init=${INIT} --update=${UPDATE} --dev=${DEV_MODE}
             fi
 
             if [ ${APP_ENV} = 'debug' ] ; then
@@ -76,9 +76,9 @@ case "$1" in
 
             if [ ${APP_ENV} = 'production' ] ; then
                 # Bring up Odoo ready for production.
-                echo odoo --config ${ODOO_RC} --database= --init= --update= --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --load-language= --without-demo=all --dev=
+                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=${UPDATE} --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --without-demo=${WITHOUT_DEMO} --load-language= --dev=
 
-                exec odoo --config ${ODOO_RC} --database= --init= --update= --load-language= --without-demo=all --dev=
+                exec odoo --config ${ODOO_RC} --init=${INIT} --update=${UPDATE} --load-language= --dev=
             fi
         fi
         ;;
