@@ -1,6 +1,9 @@
 # Ignores the main configuration file.
 /.env
 
+# Ignores the pgadmin private key
+pgadmin/private_key
+
 # Ignores the docker compose local or production environment.
 docker-compose.override.yml
 
