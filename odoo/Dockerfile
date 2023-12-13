@@ -39,7 +39,6 @@ RUN apt-get update && apt-get install -y \
     git \
     git-man \
     less \
-    libcbor0 \
     libcurl3-gnutls \
     libedit2 \
     liberror-perl \
