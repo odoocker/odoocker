@@ -1,5 +1,5 @@
-jinja2
-sortedcontainers
 debugpy
 websocket-client
-pyOpenSSL
+redis
+boto3
+sentry-sdk
