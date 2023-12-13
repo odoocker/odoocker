@@ -1,3 +1,5 @@
+urllib3
+chardet
 jinja2
 debugpy
 websocket-client
