@@ -1,5 +1,7 @@
+jinja2
 debugpy
 websocket-client
 redis
 boto3
 sentry-sdk
+aiohttp
