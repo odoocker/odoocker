@@ -14,14 +14,22 @@ ARG LOG_PATH
 ARG GITHUB_USER
 ARG GITHUB_ACCESS_TOKEN
 ARG ENTERPRISE_ADDONS
+ARG THIRD_PARTY_ADDONS
 ARG ODOO_RC
+ARG USE_REDIS
+ARG USE_S3
+ARG USE_SENTRY
 
 ENV ODOO_TAG=${ODOO_TAG} \
     LOG_PATH=${LOG_PATH} \
     GITHUB_USER=${GITHUB_USER} \
     GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN} \
     ENTERPRISE_ADDONS=${ENTERPRISE_ADDONS} \
-    ODOO_RC=${ODOO_RC}
+    THIRD_PARTY_ADDONS=${THIRD_PARTY_ADDONS} \
+    ODOO_RC=${ODOO_RC} \
+    USE_REDIS=${USE_REDIS} \
+    USE_S3=${USE_S3} \
+    USE_SENTRY=${USE_SENTRY}
 
 #------------------------#
 #    APT Dependencies    #
@@ -42,6 +50,18 @@ RUN apt-get update && apt-get install -y \
     # Clean up the apt cache to reduce the image size
     && rm -rf /var/lib/apt/lists/*
 
+#---------------------#
+#   PIP Dependecies   #
+#---------------------#
+# Upgrade pip
+RUN pip3 install --upgrade pip
+
+# Copy & Install PIP requirements
+COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
+
+RUN python3 -m pip install -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+
 #-----------------------#
 #    Odoo Enterprise    #
 #-----------------------#
@@ -55,17 +75,15 @@ RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
         git clone https://${GITHUB_USER}:${GITHUB_ACCESS_TOKEN}@github.com/odoo/enterprise.git ${ENTERPRISE_ADDONS} --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags; \
     fi
 
-#---------------------#
-#   PIP Dependecies   #
-#---------------------#
-# Upgrade pip
-RUN pip3 install --upgrade pip
+#-------------------------#
+#    Odoo Extra Addons    #
+#-------------------------#
 
-# Copy & Install PIP requirements
-COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
+RUN mkdir -p ${THIRD_PARTY_ADDONS} && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
-RUN python3 -m pip install --upgrade -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
+COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
+COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
+RUN /third-party-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 #---------------------#
 #       Logging       #
@@ -80,6 +98,7 @@ RUN touch ${LOG_PATH} && chown odoo:odoo ${LOG_PATH}
 
 # Copy environment variables & script to generate odoo.conf
 COPY --chown=odoo:odoo ./.env /
+COPY --chown=odoo:odoo ./odoo/odoo.conf /
 COPY --chown=odoo:odoo ./odoo/odoorc.sh /
 
 # Generate odoo.conf
