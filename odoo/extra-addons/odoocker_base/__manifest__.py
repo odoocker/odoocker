@@ -1,8 +1,8 @@
 {
-    'name': 'Report URL',
-    'summary': 'Adds Report URL to Odoo Container',
+    'name': 'Odoocker Base',
+    'summary': 'Supercharge Odoo with Odoocker',
     'description': '''
-        Odoo Containers doesn't come with report.url param out of the box, so we add it for you to work with Odoocker.
+        Some Odoocker dependencies require to some custom values that we cover with this Addon for you.
     ''',
     'version': '1.0.0',
     'category': 'Technical',

@@ -5,4 +5,10 @@
         <field name="key">report.url</field>
         <field name="value">http://127.0.0.1:8069</field>
     </record>
+
+    <!-- When initializing Odoo with S3 storage. -->
+    <record id="ir_attachment_location" model="ir.config_parameter">
+        <field name="key">ir_attachment.location</field>
+        <field name="value">s3</field>
+    </record>
 </odoo>
