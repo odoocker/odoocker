@@ -20,3 +20,15 @@ services:
     ports:
       - 80:80
       - 443:443
+
+  letsencrypt:
+    restart: 'no'
+
+  redis:
+    restart: 'no'
+
+  s3:
+    restart: 'no'
+
+  pgadmin:
+    restart: 'no'
