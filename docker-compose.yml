@@ -152,7 +152,6 @@ services:
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
     depends_on:
       - nginx-proxy
-    restart: unless-stopped
     volumes_from:
       - nginx-proxy:rw
     volumes:
