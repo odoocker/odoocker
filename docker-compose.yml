@@ -58,7 +58,6 @@ services:
       dockerfile: ./postgres/Dockerfile
       args:
         - POSTGRES_TAG
-    restart: unless-stopped
     tty: true
     volumes:
       - pg-data:${PGDATA}
@@ -82,7 +81,6 @@ services:
     image: nginx:${NGINX_TAG}
     depends_on:
       - odoo
-    restart: unless-stopped
     tty: true
     expose:
       - 80/tcp
@@ -102,7 +100,6 @@ services:
     image: nginxproxy/nginx-proxy:${NGINX_PROXY_TAG}
     depends_on:
       - nginx
-    restart: unless-stopped
     tty: true
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
@@ -123,7 +120,6 @@ services:
     platform: linux/amd64
     ports:
       - ${KEYDB_PORT}:${KEYDB_PORT}
-    restart: unless-stopped
     volumes:
       - redis-data:${KEYDB_DATA}
     networks:
