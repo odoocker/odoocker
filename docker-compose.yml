@@ -7,9 +7,11 @@ services:
         - ODOO_TAG
         - ODOO_RC
         - ROOT_PATH
+        - ENTERPRISE_USER
+        - ENTERPRISE_ACCESS_TOKEN
+        - ENTERPRISE_ADDONS
         - GITHUB_USER
         - GITHUB_ACCESS_TOKEN
-        - ENTERPRISE_ADDONS
         - THIRD_PARTY_ADDONS
         - LOG_PATH
         - USE_REDIS
