@@ -3,3 +3,4 @@ websocket-client
 redis
 boto3
 sentry-sdk
+urllib3==1.26.5 # Odoo community is currently locked in this version
