@@ -71,14 +71,14 @@ case "$1" in
                 # Automagically upgrade all addons and install new ones. Ideal for deployment process.
                 echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=all --load=${LOAD} --log-level=${LOG_LEVEL} --load-language=${LOAD_LANGUAGE} --limit-time-cpu=3600 --limit-time-real=7200 --dev=
 
-                exec odoo --config ${ODOO_RC} --update=all --without-demo=all --workers=0 --limit-time-cpu=3600 --limit-time-real=7200 --dev=
+                exec odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=all --without-demo=all --workers=0 --limit-time-cpu=3600 --limit-time-real=7200 --dev=
             fi
 
             if [ ${APP_ENV} = 'production' ] ; then
                 # Bring up Odoo ready for production.
-                echo odoo --config ${ODOO_RC} --database=${DB_NAME} --init=${INIT} --update=${UPDATE} --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --without-demo=${WITHOUT_DEMO} --load-language= --dev=
+                echo odoo --config ${ODOO_RC} --database= --init=${INIT} --update=${UPDATE} --load=${LOAD} --workers=${WORKERS} --log-level=${LOG_LEVEL} --without-demo=${WITHOUT_DEMO} --load-language= --dev=
 
-                exec odoo --config ${ODOO_RC} --init=${INIT} --update=${UPDATE} --load-language= --dev=
+                exec odoo --config ${ODOO_RC} --database= --init=${INIT} --update=${UPDATE} --load-language= --dev=
             fi
         fi
         ;;
