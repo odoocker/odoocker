@@ -11,9 +11,11 @@ USER root
 ARG ODOO_TAG
 ARG ROOT_PATH
 ARG LOG_PATH
+ARG ENTERPRISE_USER
+ARG ENTERPRISE_ACCESS_TOKEN
+ARG ENTERPRISE_ADDONS
 ARG GITHUB_USER
 ARG GITHUB_ACCESS_TOKEN
-ARG ENTERPRISE_ADDONS
 ARG THIRD_PARTY_ADDONS
 ARG ODOO_RC
 ARG USE_REDIS
@@ -22,20 +24,32 @@ ARG USE_SENTRY
 
 ENV ODOO_TAG=${ODOO_TAG} \
     LOG_PATH=${LOG_PATH} \
+    ENTERPRISE_USER=${ENTERPRISE_USER} \
+    ENTERPRISE_ACCESS_TOKEN=${ENTERPRISE_ACCESS_TOKEN} \
+    ENTERPRISE_ADDONS=${ENTERPRISE_ADDONS} \
     GITHUB_USER=${GITHUB_USER} \
     GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN} \
-    ENTERPRISE_ADDONS=${ENTERPRISE_ADDONS} \
     THIRD_PARTY_ADDONS=${THIRD_PARTY_ADDONS} \
     ODOO_RC=${ODOO_RC} \
     USE_REDIS=${USE_REDIS} \
     USE_S3=${USE_S3} \
     USE_SENTRY=${USE_SENTRY}
 
+#---------------------#
+#       Logging       #
+#---------------------#
+# Create odoo.log file
+RUN touch ${LOG_PATH} && chown odoo:odoo ${LOG_PATH}
+
 #------------------------#
 #    APT Dependencies    #
 #------------------------#
+# Install Odoocker image dependencies
 RUN apt-get update && apt-get install -y \
-    apt-utils \
+    # `zip` and `unzip` for filestore management
+    zip \
+    unzip \
+    # `git` required packages
     git \
     git-man \
     less \
@@ -43,59 +57,46 @@ RUN apt-get update && apt-get install -y \
     libcurl3-gnutls \
     libedit2 \
     liberror-perl \
+    libfido2-1 \
     libxmuu1 \
     openssh-client \
     patch \
     xauth \
-    # Clean up the apt cache to reduce the image size
+    # Remove apt lists
     && rm -rf /var/lib/apt/lists/*
+
+#-----------------------#
+#    Odoo Enterprise    #
+#-----------------------#
+# Create Enterprise addons directory
+RUN mkdir -p ${ENTERPRISE_ADDONS} && chown odoo:odoo -R ${ENTERPRISE_ADDONS}
+
+# Clone Enterprise addons if user and token are present
+COPY --chown=odoo:odoo ./odoo/clone-enterprise.sh /
+RUN /clone-enterprise.sh
 
 #---------------------#
 #   PIP Dependecies   #
 #---------------------#
-# Upgrade pip
-RUN pip3 install --upgrade pip
-
 # Copy & Install PIP requirements
 COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
 
 RUN python3 -m pip install -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
-#-----------------------#
-#    Odoo Enterprise    #
-#-----------------------#
-
-# Create Enterprise addons directory
-RUN mkdir -p ${ENTERPRISE_ADDONS} && \
-    chown odoo:odoo -R ${ENTERPRISE_ADDONS}
-
-# Clone Enterprise addons if user and token are present
-RUN if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then \
-        git clone https://${GITHUB_USER}:${GITHUB_ACCESS_TOKEN}@github.com/odoo/enterprise.git ${ENTERPRISE_ADDONS} --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags; \
-    fi
-
-#-------------------------#
-#    Odoo Extra Addons    #
-#-------------------------#
-
-RUN mkdir -p ${THIRD_PARTY_ADDONS} && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
-
+#--------------------------#
+#    Third Party Addons    #
+#--------------------------#
+# Create third-party-addons directory and clone them
+RUN mkdir -p ${THIRD_PARTY_ADDONS}
 COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
-COPY --chown=odoo:odoo ./odoo/third-party-addons.sh /
-RUN /third-party-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
-
-#---------------------#
-#       Logging       #
-#---------------------#
-
-# Create odoo.log file
-RUN touch ${LOG_PATH} && chown odoo:odoo ${LOG_PATH}
+COPY --chown=odoo:odoo ./odoo/clone-addons.sh /
+COPY --chown=odoo:odoo ./odoo/third-party-addons.txt /
+RUN /clone-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 
 #-----------------------#
 #       Odoo Conf       #
 #-----------------------#
-
 # Copy environment variables & script to generate odoo.conf
 COPY --chown=odoo:odoo ./.env /
 COPY --chown=odoo:odoo ./odoo/odoo.conf /
