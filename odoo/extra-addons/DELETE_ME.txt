@@ -1,0 +1,2 @@
+Delete me once you add your first extra addon :)
+This folder is made for addons that are not clonable via GitHub.

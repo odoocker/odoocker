@@ -7,9 +7,11 @@ services:
         - ODOO_TAG
         - ODOO_RC
         - ROOT_PATH
+        - ENTERPRISE_USER
+        - ENTERPRISE_ACCESS_TOKEN
+        - ENTERPRISE_ADDONS
         - GITHUB_USER
         - GITHUB_ACCESS_TOKEN
-        - ENTERPRISE_ADDONS
         - THIRD_PARTY_ADDONS
         - LOG_PATH
         - USE_REDIS
@@ -115,6 +117,24 @@ services:
       - internal
     profiles: [$NGINX_PROXY_PROFILES]
 
+  letsencrypt:
+    image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
+    depends_on:
+      - nginx-proxy
+    volumes_from:
+      - nginx-proxy:rw
+    volumes:
+      - certs:${NGINX_CERTS}:rw
+      - acme:${NGINX_ACME}
+      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
+    environment:
+      - ACME_CA_URI
+      - CERTS_UPDATE_INTERVAL
+      - DEFAULT_EMAIL
+    networks:
+      - internal
+    profiles: [$ACME_COMPANION_PROFILES]
+
   redis:
     image: eqalpha/keydb:${KEYDB_TAG}
     platform: linux/amd64
@@ -144,24 +164,6 @@ services:
       - internal
     profiles: [$MINIO_PROFILES]
 
-  letsencrypt:
-    image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
-    depends_on:
-      - nginx-proxy
-    volumes_from:
-      - nginx-proxy:rw
-    volumes:
-      - certs:${NGINX_CERTS}:rw
-      - acme:${NGINX_ACME}
-      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
-    environment:
-      - ACME_CA_URI
-      - CERTS_UPDATE_INTERVAL
-      - DEFAULT_EMAIL
-    networks:
-      - internal
-    profiles: [$ACME_COMPANION_PROFILES]
-
   pgadmin:
     build:
       context: ./
@@ -169,7 +171,6 @@ services:
       args:
         - PGADMIN_TAG
     depends_on:
-      - postgres
       - nginx-proxy
     expose:
       - 80
