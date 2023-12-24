@@ -25,7 +25,7 @@ clone_and_copy_modules() {
 
     # Clone and copy logic for enterprise repository
     if [[ $repo_type == "enterprise" ]]; then
-        if [[ ! -d "${ENTERPRISE_ADDONS}" ]] && [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then
+        if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then
             $clone_cmd --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags
         fi
     else
@@ -84,6 +84,8 @@ expand_env_vars() {
 
 # Read the configuration file and process each line
 while IFS= read -r line; do
+    mkdir -p ${ENTERPRISE_ADDONS}
+    mkdir -p ${THIRD_PARTY_ADDONS}
     [[ -z "$line" || "$line" == \#* ]] && continue
     clone_and_copy_modules $(expand_env_vars "$line")
 done < "third-party-addons.txt"

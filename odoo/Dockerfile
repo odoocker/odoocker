@@ -78,10 +78,8 @@ RUN python3 -m pip install -r /tmp/requirements.txt && \
 #    Odoo Enterprise + Third Party Addons    #
 #--------------------------------------------#
 # Create third-party-addons directory and clone them
-RUN mkdir -p ${THIRD_PARTY_ADDONS}
 COPY --chown=odoo:odoo ./odoo/clone-addons.sh /
 COPY --chown=odoo:odoo ./odoo/third-party-addons.txt /
-# RUN /clone-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
 RUN /clone-addons.sh
 
 #-----------------------#
