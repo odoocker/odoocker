@@ -8,11 +8,8 @@ construct_clone_command() {
     local repo_url=$2
     case $repo_type in
         private) echo "git clone https://${GITHUB_USER}:${GITHUB_ACCESS_TOKEN}@${repo_url#https://}" ;;
-        enterprise) 
-            [ -n "$ENTERPRISE_USER" ] && [ -n "$ENTERPRISE_ACCESS_TOKEN" ] && \
-            echo "git clone https://${ENTERPRISE_USER}:${ENTERPRISE_ACCESS_TOKEN}@${repo_url#https://} ${ENTERPRISE_ADDONS}" 
-            ;;
-        *) echo "git clone $repo_url" ;;
+        enterprise) echo "git clone https://${ENTERPRISE_USER}:${ENTERPRISE_ACCESS_TOKEN}@${repo_url#https://} ${ENTERPRISE_ADDONS}" ;;
+        public) echo "git clone $repo_url" ;;
     esac
 }
 
