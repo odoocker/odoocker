@@ -1,12 +1,17 @@
 # This file is read by clone-addons.sh
 
+# Enterprise addons
+enterprise https://github.com/odoo/enterprise true
+
 # Odoocker repositories
 public https://github.com/odoocker/odoocker-modules.git odoocker_base true
 public https://github.com/odoocker/odoo-cloud-platform.git session_redis ${USE_REDIS} base_attachment_object_storage ${USE_S3} attachment_s3 ${USE_S3}
 public https://github.com/odoocker/server-tools.git sentry ${USE_SENTRY}
 
 # Add repositories with the following format:
-# <public|private> <repo_url> <module1> <copy_module1_condition> <module2> <copy_module2_condition> ...
+# <public|private> <repo_url> <true|false>
+# or
+# <public|private> <repo_url> <module1> <true|false> <module2> <true|false> ...
 
 # Public repositories
 
