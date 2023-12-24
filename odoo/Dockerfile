@@ -57,23 +57,13 @@ RUN apt-get update && apt-get install -y \
     libcurl3-gnutls \
     libedit2 \
     liberror-perl \
-    libpcre2-8-0 \
+    libfido2-1 \
     libxmuu1 \
     openssh-client \
     patch \
     xauth \
     # Remove apt lists
     && rm -rf /var/lib/apt/lists/*
-
-#-----------------------#
-#    Odoo Enterprise    #
-#-----------------------#
-# Create Enterprise addons directory
-RUN mkdir -p ${ENTERPRISE_ADDONS} && chown odoo:odoo -R ${ENTERPRISE_ADDONS}
-
-# Clone Enterprise addons if user and token are present
-COPY --chown=odoo:odoo ./odoo/clone-enterprise.sh /
-RUN /clone-enterprise.sh
 
 #---------------------#
 #   PIP Dependecies   #
@@ -84,15 +74,15 @@ COPY --chown=odoo:odoo ./odoo/requirements.txt /tmp/requirements.txt
 RUN python3 -m pip install -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
-#--------------------------#
-#    Third Party Addons    #
-#--------------------------#
+#--------------------------------------------#
+#    Odoo Enterprise + Third Party Addons    #
+#--------------------------------------------#
 # Create third-party-addons directory and clone them
 RUN mkdir -p ${THIRD_PARTY_ADDONS}
-COPY --chown=odoo:odoo ./odoo/fix-manifest.py /
 COPY --chown=odoo:odoo ./odoo/clone-addons.sh /
 COPY --chown=odoo:odoo ./odoo/third-party-addons.txt /
-RUN /clone-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
+# RUN /clone-addons.sh && chown odoo:odoo -R ${THIRD_PARTY_ADDONS}
+RUN /clone-addons.sh
 
 #-----------------------#
 #       Odoo Conf       #
