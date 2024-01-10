@@ -18,6 +18,7 @@ services:
         - USE_S3
         - USE_SENTRY
     tty: true
+    shm_size: 1gb
     volumes:
       - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
@@ -61,6 +62,7 @@ services:
       args:
         - POSTGRES_TAG
     tty: true
+    shm_size: 1gb
     volumes:
       - pg-data:${PGDATA}
       - ./postgres/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh
@@ -86,6 +88,7 @@ services:
     tty: true
     expose:
       - 80/tcp
+    shm_size: 1gb
     volumes:
       - ./nginx/nginx.conf:${NGINX_CONF}
       - ./nginx/default.conf:${NGINX_DEFAULT_CONF}
@@ -103,6 +106,7 @@ services:
     depends_on:
       - nginx
     tty: true
+    shm_size: 1gb
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
       - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
@@ -138,6 +142,7 @@ services:
         # - --certificatesresolvers.leresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
       - --serversTransport.insecureSkipVerify=true
     tty: true
+    shm_size: 1gb
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./acme.json:/acme.json"
@@ -197,6 +202,7 @@ services:
       - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
       - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
     command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
+    shm_size: 1gb
     volumes:
       - s3-data:${MINIO_DATA}
     ports:
@@ -216,6 +222,7 @@ services:
       - nginx-proxy
     expose:
       - 80
+    shm_size: 1gb
     volumes:
       - pgadmin-data:${PGADMIN_DATA}
     environment:
