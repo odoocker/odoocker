@@ -117,6 +117,48 @@ services:
       - internal
     profiles: [$NGINX_PROXY_PROFILES]
 
+  traefik:
+    container_name: traefik
+    image: "traefik:${TRAEFIK_TAG}"
+    networks:
+      - internal
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --api.debug=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker
+      - --log.level=INFO
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --certificatesresolvers.leresolver.acme.httpchallenge=true
+      - --certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.leresolver.acme.email=xxxxxx@yourdomain.tld #Set your email address here, is for the generation of SSL certificates with Let's Encrypt. 
+      - --certificatesresolvers.leresolver.acme.storage=/acme.json
+        # - --certificatesresolvers.leresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      - --serversTransport.insecureSkipVerify=true
+    tty: true
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./acme.json:/acme.json"
+      - traefik_logs:/var/log/traefik
+    labels:
+      - "traefik.enable=true"
+
+      # Catch all HTTP trafic and redirect it to HTTPS
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+      # Traefik Dashboard route
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.yourdomain.tld`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=leresolver"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+    profiles: [$TRAEFIK_PROFILES]
+
+
   letsencrypt:
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
     depends_on:
@@ -216,6 +258,7 @@ volumes:
   vhost:
   certs:
   acme:
+  traefik_logs:
 
 networks:
   internal:
