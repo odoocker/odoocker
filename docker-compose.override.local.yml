@@ -21,6 +21,12 @@ services:
       - 80:80
       - 443:443
 
+  traefik: 
+    restart: 'no'
+    ports:
+      - 80:80
+      - 443:443
+
   letsencrypt:
     restart: 'no'
 

@@ -21,6 +21,24 @@ services:
       - 80:80
       - 443:443
 
+  traefik: 
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    command:
+      - --entrypoints.websecure.address=${ENTRYPOINTS_WEBSECURE_ADDRESS}
+      - --certificatesresolvers.leresolver.acme.httpchallenge=${ACME_HTTPCHALLENGE}
+      - --certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=${ACME_HTTPCHALLENGE_ENTRYPOINT}
+      - --certificatesresolvers.leresolver.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.leresolver.acme.storage=${ACME_STORAGE}
+      - --certificatesresolvers.leresolver.acme.caserver=${ACME_CASERVER}
+    labels:
+      - traefik.http.routers.http-catchall.middlewares=${HTTP_CATCHALL_MIDDLEWARES}
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=${MIDDLEWARES_REDIRECT_SCHEME}
+      - traefik.http.routers.traefik-dashboard.entrypoints=${TRAEFIK_DASHBOARD_ENTRYPOINTS}
+      - traefik.http.routers.traefik-dashboard.tls.certresolver=${TRAEFIK_DASHBOARD_TLS_CERTRESOLVER}
+
   letsencrypt:
     restart: unless-stopped
 
