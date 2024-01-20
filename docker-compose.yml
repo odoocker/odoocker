@@ -1,5 +1,6 @@
 services:
   odoo:
+    container_name: odoo
     build:
       context: ./
       dockerfile: ./odoo/Dockerfile
@@ -18,6 +19,7 @@ services:
         - USE_S3
         - USE_SENTRY
     tty: true
+    shm_size: 1gb
     volumes:
       - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
@@ -55,12 +57,14 @@ services:
     profiles: [$ODOO_PROFILES]
 
   postgres:
+    container_name: postgres
     build: 
       context: ./
       dockerfile: ./postgres/Dockerfile
       args:
         - POSTGRES_TAG
     tty: true
+    shm_size: 1gb
     volumes:
       - pg-data:${PGDATA}
       - ./postgres/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh
@@ -80,12 +84,14 @@ services:
     profiles: [$POSTGRES_PROFILES]
 
   nginx:
+    container_name: nginx
     image: nginx:${NGINX_TAG}
     depends_on:
       - odoo
     tty: true
     expose:
       - 80/tcp
+    shm_size: 1gb
     volumes:
       - ./nginx/nginx.conf:${NGINX_CONF}
       - ./nginx/default.conf:${NGINX_DEFAULT_CONF}
@@ -99,10 +105,12 @@ services:
     profiles: [$NGINX_PROFILES]
 
   nginx-proxy:
+    container_name: nginx-proxy
     image: nginxproxy/nginx-proxy:${NGINX_PROXY_TAG}
     depends_on:
       - nginx
     tty: true
+    shm_size: 1gb
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
       - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
@@ -132,6 +140,7 @@ services:
       - --accesslog.filepath=${ACCESSLOG_FILEPATH}
       - --serversTransport.insecureSkipVerify=${INSERCURE_SKIP_VERIFY}
     tty: true
+    shm_size: 1gb
     volumes:
       - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
       - ./acme.json:${ACME_JSON}
@@ -146,7 +155,8 @@ services:
       - traefik.http.routers.traefik-dashboard.service=${TRAEFIK_DASHBOARD_SERVICE}
     profiles: [$TRAEFIK_PROFILES]
 
-  letsencrypt:
+  acme-companion:
+    container_name: acme-companion
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
     depends_on:
       - nginx-proxy
@@ -164,7 +174,8 @@ services:
       - internal
     profiles: [$ACME_COMPANION_PROFILES]
 
-  redis:
+  keydb:
+    container_name: keydb
     image: eqalpha/keydb:${KEYDB_TAG}
     platform: linux/amd64
     ports:
@@ -175,7 +186,8 @@ services:
       - internal
     profiles: [$KEYDB_PROFILES]
 
-  s3:
+  minio:
+    container_name: minio
     image: minio/minio:${MINIO_TAG}
     environment:
       - MINIO_ROOT_USER
@@ -184,6 +196,7 @@ services:
       - VIRTUAL_HOST=${MINIO_VIRTUAL_HOST}
       - VIRTUAL_PORT=${MINIO_CONSOLE_PORT}
     command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
+    shm_size: 1gb
     volumes:
       - s3-data:${MINIO_DATA}
     ports:
@@ -194,6 +207,7 @@ services:
     profiles: [$MINIO_PROFILES]
 
   pgadmin:
+    container_name: pgadmin
     build:
       context: ./
       dockerfile: ./pgadmin/Dockerfile
@@ -203,6 +217,7 @@ services:
       - nginx-proxy
     expose:
       - 80
+    shm_size: 1gb
     volumes:
       - pgadmin-data:${PGADMIN_DATA}
     environment:
