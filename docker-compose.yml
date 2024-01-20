@@ -1,5 +1,6 @@
 services:
   odoo:
+    container_name: odoo
     build:
       context: ./
       dockerfile: ./odoo/Dockerfile
@@ -56,6 +57,7 @@ services:
     profiles: [$ODOO_PROFILES]
 
   postgres:
+    container_name: postgres
     build: 
       context: ./
       dockerfile: ./postgres/Dockerfile
@@ -82,6 +84,7 @@ services:
     profiles: [$POSTGRES_PROFILES]
 
   nginx:
+    container_name: nginx
     image: nginx:${NGINX_TAG}
     depends_on:
       - odoo
@@ -102,6 +105,7 @@ services:
     profiles: [$NGINX_PROFILES]
 
   nginx-proxy:
+    container_name: nginx-proxy
     image: nginxproxy/nginx-proxy:${NGINX_PROXY_TAG}
     depends_on:
       - nginx
@@ -151,7 +155,8 @@ services:
       - traefik.http.routers.traefik-dashboard.service=${TRAEFIK_DASHBOARD_SERVICE}
     profiles: [$TRAEFIK_PROFILES]
 
-  letsencrypt:
+  acme:
+    container_name: acme-companion
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
     depends_on:
       - nginx-proxy
@@ -169,7 +174,8 @@ services:
       - internal
     profiles: [$ACME_COMPANION_PROFILES]
 
-  redis:
+  keydb:
+    container_name: keydb
     image: eqalpha/keydb:${KEYDB_TAG}
     platform: linux/amd64
     ports:
@@ -180,7 +186,8 @@ services:
       - internal
     profiles: [$KEYDB_PROFILES]
 
-  s3:
+  minio:
+    container_name: minio
     image: minio/minio:${MINIO_TAG}
     environment:
       - MINIO_ROOT_USER
@@ -200,6 +207,7 @@ services:
     profiles: [$MINIO_PROFILES]
 
   pgadmin:
+    container_name: pgadmin
     build:
       context: ./
       dockerfile: ./pgadmin/Dockerfile
