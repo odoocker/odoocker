@@ -123,41 +123,28 @@ services:
     networks:
       - internal
     command:
-      - --api.dashboard=true
-      - --api.insecure=false
-      - --api.debug=true
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
+      - --api.dashboard=${API_DASHBOARD}
+      - --api.insecure=${API_INSECURE}
+      - --api.debug=${API_DEBUG}
+      - --entrypoints.web.address=${ENTRYPOINTS_WEB_ADDRESS}
       - --providers.docker
-      - --log.level=INFO
-      - --accesslog.filepath=/var/log/traefik/access.log
-      - --certificatesresolvers.leresolver.acme.httpchallenge=true
-      - --certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.leresolver.acme.email=xxxxxx@yourdomain.tld #Set your email address here, is for the generation of SSL certificates with Let's Encrypt. 
-      - --certificatesresolvers.leresolver.acme.storage=/acme.json
-        # - --certificatesresolvers.leresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
-      - --serversTransport.insecureSkipVerify=true
+      - --log.level=${TRAEFIK_LOG_LEVEL}
+      - --accesslog.filepath=${ACCESSLOG_FILEPATH}
+      - --serversTransport.insecureSkipVerify=${INSERCURE_SKIP_VERIFY}
     tty: true
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./acme.json:/acme.json"
-      - traefik_logs:/var/log/traefik
+      - ${DOCKER_SOCK}:${DOCKER_SOCK}:ro
+      - ./acme.json:${ACME_JSON}
+      - traefik_logs:${TRAEFIK_LOGS}
     labels:
-      - "traefik.enable=true"
-
+      - traefik.enable=${TRAEFIK_ENABLE}
       # Catch all HTTP trafic and redirect it to HTTPS
-      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
-      - "traefik.http.routers.http-catchall.entrypoints=web"
-      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-
+      - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
+      - traefik.http.routers.http-catchall.entrypoints=${HTTP_CATCHALL_ENTRYPOINTS}
       # Traefik Dashboard route
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.yourdomain.tld`)"
-      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
-      - "traefik.http.routers.traefik-dashboard.tls.certresolver=leresolver"
-      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)
+      - traefik.http.routers.traefik-dashboard.service=${TRAEFIK_DASHBOARD_SERVICE}
     profiles: [$TRAEFIK_PROFILES]
-
 
   letsencrypt:
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
