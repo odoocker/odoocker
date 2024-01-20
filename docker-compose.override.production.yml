@@ -39,13 +39,13 @@ services:
       - traefik.http.routers.traefik-dashboard.entrypoints=${TRAEFIK_DASHBOARD_ENTRYPOINTS}
       - traefik.http.routers.traefik-dashboard.tls.certresolver=${TRAEFIK_DASHBOARD_TLS_CERTRESOLVER}
 
-  letsencrypt:
+  acme-companion:
     restart: unless-stopped
 
-  redis:
+  keydb:
     restart: unless-stopped
 
-  s3:
+  minio:
     restart: unless-stopped
 
   pgadmin:

@@ -27,13 +27,13 @@ services:
       - 80:80
       - 443:443
 
-  letsencrypt:
+  acme-companion:
     restart: 'no'
 
-  redis:
+  keydb:
     restart: 'no'
 
-  s3:
+  minio:
     restart: 'no'
 
   pgadmin:
