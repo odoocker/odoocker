@@ -155,7 +155,7 @@ services:
       - traefik.http.routers.traefik-dashboard.service=${TRAEFIK_DASHBOARD_SERVICE}
     profiles: [$TRAEFIK_PROFILES]
 
-  acme:
+  acme-companion:
     container_name: acme-companion
     image: nginxproxy/acme-companion:${ACME_COMPANION_TAG}
     depends_on:
