@@ -83,6 +83,23 @@ services:
       - internal
     profiles: [$POSTGRES_PROFILES]
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgbouncer
+    restart: always
+    depends_on:
+      - db
+    #ports:
+    #  - "5432:5432"
+    environment:
+      - DB_HOST=db
+      - DB_USER=odoo
+      - DB_PASSWORD=odoo
+      - MAX_CLIENT_CONN=500
+      - POOL_MODE=transaction
+      - ADMIN_USERS=postgres,dbuser,odoo
+    profiles: [$PGBOUNCER_PROFILES]
+
   nginx:
     container_name: nginx
     image: nginx:${NGINX_TAG}

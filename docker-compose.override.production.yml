@@ -12,6 +12,11 @@ services:
     ports:
       - 127.0.0.1:5432:5432
 
+  pgbouncer:
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1=5432:5432
+
   nginx:
     restart: unless-stopped
 
