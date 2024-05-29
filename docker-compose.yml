@@ -22,6 +22,7 @@ services:
       - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
+      - ./odoo/third-party-addons:${THIRD_PARTY_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
     environment:
       - HOST=${DB_HOST}
