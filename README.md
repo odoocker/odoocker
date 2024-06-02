@@ -155,6 +155,7 @@ docker-compose down
 ```
 cp docker-compose.override.production.yml docker-compose.override.yml
 ```
+- Update .env `SERVICES` (add `acme`) and `ACME_CA_URI` (use production link).
 - Make sure the DNS record of your `DOMAIN` is pointing to your server.
 - Rebuild the containers
 ```
