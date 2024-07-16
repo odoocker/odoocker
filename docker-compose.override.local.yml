@@ -12,6 +12,11 @@ services:
     ports:
       - 5432:5432
 
+  pgbouncer:
+    restart: 'no'
+    expose:
+      - 5432/tcp
+
   nginx:
     restart: 'no'
 
@@ -21,13 +26,19 @@ services:
       - 80:80
       - 443:443
 
-  letsencrypt:
+  traefik: 
+    restart: 'no'
+    ports:
+      - 80:80
+      - 443:443
+
+  acme-companion:
     restart: 'no'
 
-  redis:
+  keydb:
     restart: 'no'
 
-  s3:
+  minio:
     restart: 'no'
 
   pgadmin:
