@@ -14,8 +14,8 @@ services:
 
   pgbouncer:
     restart: 'no'
-    ports:
-      - 5432:5432
+    expose:
+      - 5432/tcp
 
   nginx:
     restart: 'no'
