@@ -43,6 +43,7 @@ In essence, Odoocker isn't just another tool, it's a philosophy. So, whether you
 1. **Clone and Configure**:
 ```
 git clone git@github.com:odoocker/odoocker.git
+cd odoocker
 cp .env.example .env && cp docker-compose.override.local.yml docker-compose.override.yml
 ```
 2. **Hosts & Domains**: To ensure everything runs smoothly, remember to add the necessary domains to your hosts file.
@@ -155,6 +156,7 @@ docker-compose down
 ```
 cp docker-compose.override.production.yml docker-compose.override.yml
 ```
+- Update .env `SERVICES` (add `acme`) and `ACME_CA_URI` (use production link).
 - Make sure the DNS record of your `DOMAIN` is pointing to your server.
 - Rebuild the containers
 ```
