@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Odoocker Debugger",
+            "type": "debugpy",
+            "request": "attach",
+            "host": "localhost",
+            "port": 8069,
+            "preLaunchTask": "Run Odoo" ,
+            "debugServer": 8070,
+            "justMyCode": false,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}/odoo",
+                    "remoteRoot": "/usr/lib/python3/dist-packages/odoo"
+                }
+            ]
+        }
+    ]
+}
