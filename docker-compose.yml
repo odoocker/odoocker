@@ -89,8 +89,6 @@ services:
     restart: always
     depends_on:
       - db
-    #ports:
-    #  - "5432:5432"
     environment:
       - DB_HOST=db
       - DB_USER=odoo
