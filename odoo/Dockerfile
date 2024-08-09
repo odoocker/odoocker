@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y \
     # `zip` and `unzip` for filestore management
     zip \
     unzip \
+    rsync \
     # `git` required packages
     git \
     git-man \
