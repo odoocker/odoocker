@@ -1,0 +1,32 @@
+# DigitalOcean Spaces — S3-compatible Terraform remote state backend
+# Copy to backend.hcl, fill in real values, and git-ignore backend.hcl.
+#
+# One-time bucket creation:
+#   doctl spaces create grove-tf-state --region nyc3
+#
+# Usage:
+#   terraform -chdir=infra/terraform/environments/sandbox \
+#     init -backend-config=backend.hcl
+
+# Spaces endpoint format: https://<region>.digitaloceanspaces.com
+endpoint = "https://nyc3.digitaloceanspaces.com"
+
+# Bucket name (created above)
+bucket = "grove-tf-state"
+
+# State file path inside the bucket
+key = "sandbox/terraform.tfstate"
+
+# Region must match the Spaces bucket region
+region = "us-east-1" # DO Spaces always uses us-east-1 for the S3 API region field
+
+# Disable AWS-specific features not supported by Spaces
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+force_path_style            = true
+
+# Credentials — set via environment variables in CI:
+#   AWS_ACCESS_KEY_ID     = DO Spaces access key
+#   AWS_SECRET_ACCESS_KEY = DO Spaces secret key
+# (Do NOT hard-code these here.)

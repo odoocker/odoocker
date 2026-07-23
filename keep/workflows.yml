@@ -1,0 +1,89 @@
+# Keep workflow definitions — severity-based routing for Grove alerts.
+#
+# Consumed by scripts/setup-monitoring.py which POSTs each workflow to
+# Keep's /api/v1/workflows endpoint. Idempotent — upserts by id.
+#
+# Flow:
+#   OpenObserve detects → POSTs alert to Keep webhook (/alerts/event)
+#   Keep deduplicates → applies a workflow matching the alert's severity
+#   Workflow fires its Discord provider with the formatted message
+#
+# Runbook links resolve to the in-repo docs/RUNBOOKS.md anchor identified
+# by `runbook_key` in the OpenObserve alert payload.
+
+workflows:
+  - id: route-warning-to-discord
+    name: "Warning → Discord"
+    description: |
+      Catches every alert tagged severity=warning and routes it to the
+      Discord warning channel. No @mention. Includes runbook link in
+      the message body for one-click navigation to recovery steps.
+    triggers:
+      - type: alert
+        filters:
+          - source: openobserve
+            severity: warning
+    actions:
+      - name: discord-warning-notify
+        provider: discord-warning
+        with:
+          # Discord webhook message body. Keep templates with {{ }} from
+          # the alert payload. The runbook link points at the in-repo
+          # docs/RUNBOOKS.md anchor — operators clone the repo or read
+          # via the GitHub UI.
+          message: |
+            ⚠️  **Grove warning** — {{ alert.name }}
+            **Severity:** warning
+            **What's happening:** {{ alert.message }}
+            **Tenant:** {{ alert.tags.tenant | default('shared') }}
+            **Started:** {{ alert.started_at }}
+            **Runbook:** https://github.com/Goldberry-Playground/odoocker-goldberrygrove/blob/main/docs/RUNBOOKS.md#{{ alert.runbook_key }}
+
+  - id: route-critical-to-discord
+    name: "Critical → Discord (with @here)"
+    description: |
+      Catches every alert tagged severity=critical and routes it to the
+      Discord critical channel WITH @here. @here pings online channel
+      members — substitutes for paid PagerDuty paging on the solo-dev
+      cost-conscious tier. If escalation to a real pager service is ever
+      needed, add a second action calling pagerduty provider here.
+    triggers:
+      - type: alert
+        filters:
+          - source: openobserve
+            severity: critical
+    actions:
+      - name: discord-critical-notify
+        provider: discord-critical
+        with:
+          message: |
+            @here 🚨 **GROVE CRITICAL** — {{ alert.name }}
+            **Severity:** critical
+            **What's broken:** {{ alert.message }}
+            **Tenant:** {{ alert.tags.tenant | default('shared') }}
+            **Started:** {{ alert.started_at }}
+            **Duration:** {{ alert.duration_s }}s
+            **Runbook:** https://github.com/Goldberry-Playground/odoocker-goldberrygrove/blob/main/docs/RUNBOOKS.md#{{ alert.runbook_key }}
+
+  - id: dedupe-noisy-flapping
+    name: "Suppress flapping (3 fires in 5 min)"
+    description: |
+      Many real monitors flap during a degradation event — OpenObserve
+      re-fires the alert on every state transition. This workflow
+      acknowledges (but doesn't re-notify) any alert that's already
+      fired 3+ times in the last 5 minutes for the same monitor.
+      Operators see the first 3 alerts then silence until the situation
+      clears for >5 min.
+    triggers:
+      - type: alert
+        filters:
+          - source: openobserve
+    conditions:
+      - type: rate-limit
+        per_monitor: true
+        max_fires: 3
+        window_seconds: 300
+    actions:
+      - name: acknowledge-only
+        type: noop
+        comment: "Rate-limited — already notified 3x in 5 min for this monitor"

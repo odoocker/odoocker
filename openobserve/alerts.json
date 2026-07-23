@@ -1,0 +1,374 @@
+{
+  "_comment": "OpenObserve alert rules — bootstrap source of truth.",
+  "_lineage": "Consumed by scripts/setup-monitoring.py which POSTs each rule to OpenObserve's /api/{org}/alerts endpoint. Each rule references a monitor by name. Idempotent — re-runs upsert by 'name'.",
+  "_routing_strategy": "Every alert fires to a single Keep webhook with severity in the JSON payload. Keep's workflows.yml then routes warning → #grove-alerts-warning, critical → #grove-alerts-critical with @here. No Slack/PagerDuty wiring exists in OpenObserve — that's all Keep's job.",
+  "_destinations": [
+    {
+      "name": "keep-webhook",
+      "url": "http://keep-backend:8080/alerts/event/{webhook_token}",
+      "method": "POST",
+      "_secret_substitution": "{webhook_token} is replaced by setup-monitoring.py from KEEP_WEBHOOK_TOKEN env at bootstrap time."
+    }
+  ],
+  "alerts": [
+    {
+      "name": "frontend-down-warning",
+      "monitor_names": [
+        "hub-root", "hub-journal",
+        "goldberry-root", "goldberry-shop", "goldberry-blog",
+        "ggg-root", "ggg-shop", "ggg-blog",
+        "nursery-root", "nursery-shop", "nursery-blog"
+      ],
+      "trigger_condition": "status != 2xx for >60s OR response time >5s for >2 checks",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "frontend-degraded",
+      "_message_template": "[{tenant}] {route} degraded — status={status_code} duration={duration_ms}ms. Runbook: docs/RUNBOOKS.md#frontend-degraded"
+    },
+    {
+      "name": "frontend-down-critical",
+      "monitor_names": [
+        "hub-root", "goldberry-root", "ggg-root", "nursery-root"
+      ],
+      "trigger_condition": "monitor unreachable (timeout or connection refused) for >30s",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "frontend-down",
+      "_message_template": "[{tenant}] FRONTEND DOWN — root endpoint unreachable for {duration_s}s. Runbook: docs/RUNBOOKS.md#frontend-down"
+    },
+    {
+      "name": "odoo-down-critical",
+      "monitor_names": ["odoo-health"],
+      "trigger_condition": "monitor unreachable for >30s",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-down",
+      "_message_template": "ODOO BACKEND DOWN — /web/login unreachable for {duration_s}s. All storefront cart + checkout flows will fail. Runbook: docs/RUNBOOKS.md#odoo-down"
+    },
+    {
+      "name": "odoo-degraded-warning",
+      "monitor_names": ["odoo-health"],
+      "trigger_condition": "status != 2xx,303 for >60s OR response time >10s for >3 checks",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-degraded",
+      "_message_template": "Odoo degraded — status={status_code} duration={duration_ms}ms. Storefronts may show empty product lists. Runbook: docs/RUNBOOKS.md#odoo-degraded"
+    },
+    {
+      "name": "ghost-down-warning",
+      "monitor_names": ["ghost-goldberry-admin", "ghost-ggg-admin", "ghost-nursery-admin"],
+      "trigger_condition": "monitor unreachable for >60s",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "ghost-down",
+      "_message_template": "[{tenant}] Ghost admin API unreachable — /blog page will fail. Runbook: docs/RUNBOOKS.md#ghost-down",
+      "_note": "Ghost is content-only; degraded Ghost doesn't break commerce, hence warning not critical."
+    },
+    {
+      "name": "postgres-down-critical",
+      "monitor_names": ["postgres-tcp"],
+      "trigger_condition": "TCP probe failed for >30s",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "postgres-down",
+      "_message_template": "POSTGRES DOWN — TCP probe to postgres:5432 failed for {duration_s}s. Odoo will be unable to serve any request. Runbook: docs/RUNBOOKS.md#postgres-down"
+    },
+    {
+      "name": "ssl-expiring-warning",
+      "monitor_names": [
+        "ssl-goldberrygrove-farm",
+        "ssl-woodworkingeorge-com",
+        "ssl-atthegrovenursery-com",
+        "ssl-gatheringatthegrove-com"
+      ],
+      "trigger_condition": "days_until_expiry < 14",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "ssl-expiring",
+      "_message_template": "[{host}] SSL cert expires in {days_remaining} days. Runbook: docs/RUNBOOKS.md#ssl-expiring",
+      "_deferred": "Local has no real certs. SSL monitors will fail-to-evaluate locally; alert is meaningful only once M2 droplet exists with real certs."
+    },
+    {
+      "name": "synthetic-health-critical",
+      "stream": "synthetic_journey_success",
+      "trigger_condition": "journey='health' success==0 for >2 consecutive runs",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-down",
+      "_message_template": "SYNTHETIC health failing — grove_headless /health is down (Odoo API unreachable or module unloaded). All storefront commerce fails. Runbook: docs/RUNBOOKS.md#odoo-down",
+      "_note": "Tier-1 synthetic (Hurl). Queries the synthetic_journey_success metric stream emitted by the synthetic-runner, not a built-in monitor."
+    },
+    {
+      "name": "synthetic-cart-critical",
+      "stream": "synthetic_journey_success",
+      "trigger_condition": "journey='cart-flow' success==0 for >2 consecutive runs (any tenant)",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "cart-broken",
+      "_message_template": "[{tenant}] SYNTHETIC cart-flow failing — add-to-cart → cart-get broke. The money path is degraded. Runbook: docs/RUNBOOKS.md#cart-broken"
+    },
+    {
+      "name": "synthetic-catalog-warning",
+      "stream": "synthetic_journey_success",
+      "trigger_condition": "journey='catalog' success==0 for >2 consecutive runs (any tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "catalog-empty",
+      "_message_template": "[{tenant}] SYNTHETIC catalog failing — product list/detail returned no usable data. Storefront may show empty shop. Runbook: docs/RUNBOOKS.md#catalog-empty"
+    },
+    {
+      "name": "synthetic-latency-warning",
+      "stream": "synthetic_journey_duration_ms",
+      "trigger_condition": "p95(duration_ms) > 3000 over 5m (any journey/tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "synthetic-slow",
+      "_message_template": "[{tenant}] SYNTHETIC {journey} slow — p95 {duration_ms}ms over 5m (threshold 3000ms). Backend degrading. Runbook: docs/RUNBOOKS.md#synthetic-slow"
+    },
+    {
+      "name": "synthetic-checkout-critical",
+      "stream": "synthetic_journey_success",
+      "trigger_condition": "journey='checkout-canary' success==0 for >2 consecutive runs (any tenant)",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "checkout-broken",
+      "_message_template": "[{tenant}] SYNTHETIC checkout-canary failing — the /orders bearer endpoint or the access_token gate is broken. Orders cannot be created. Runbook: docs/RUNBOOKS.md#checkout-broken",
+      "_note": "Only fires when SYNTHETIC_CANARY_ENABLED=true (the canary journey runs). Tests the money-path write + the PII access_token gate end-to-end."
+    },
+    {
+      "name": "cost-budget-warning",
+      "stream": "cost_account_month_to_date",
+      "trigger_condition": "cost_account_month_to_date > 0.8 * COST_MONTHLY_BUDGET",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "cost-budget",
+      "_message_template": "COST — month-to-date spend ${mtd} is >80% of the ${budget}/mo budget. Review the rightsizing dashboard. Runbook: docs/RUNBOOKS.md#cost-budget",
+      "_note": "CostOps (DO billing bridge). Threshold uses COST_MONTHLY_BUDGET from .env.monitoring; disabled when budget=0. Only fires when COST_BRIDGE_ENABLED=true."
+    },
+    {
+      "name": "cost-budget-critical",
+      "stream": "cost_account_month_to_date",
+      "trigger_condition": "cost_account_month_to_date > COST_MONTHLY_BUDGET",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "cost-budget",
+      "_message_template": "COST — month-to-date spend ${mtd} has EXCEEDED the ${budget}/mo budget. Runbook: docs/RUNBOOKS.md#cost-budget"
+    },
+    {
+      "name": "cost-anomaly-warning",
+      "stream": "cost_account_month_to_date_usage",
+      "trigger_condition": "day-over-day cost_account_month_to_date_usage delta > 2x trailing-7d avg daily delta",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "cost-anomaly",
+      "_message_template": "COST — daily spend spiked >2x baseline (a resource was scaled/added?). Check cost_resource_monthly_estimate for the mover. Runbook: docs/RUNBOOKS.md#cost-anomaly"
+    },
+    {
+      "name": "synthetic-ghost-content-warning",
+      "stream": "synthetic_journey_success",
+      "trigger_condition": "journey='ghost-content' success==0 for >2 consecutive runs (any tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "ghost-content-empty",
+      "_message_template": "[{tenant}] SYNTHETIC ghost-content failing — Ghost Content API returned no posts (key rotated/invalid or blog empty). The tenant /blog page will fail. Runbook: docs/RUNBOOKS.md#ghost-content-empty",
+      "_note": "Only fires when SYNTHETIC_GHOST_ENABLED=true. Content-level depth beyond the ghost-*-admin availability monitors; warning (Ghost is content-only, doesn't break commerce)."
+    },
+    {
+      "name": "droplet-cpu-warning",
+      "stream": "system_cpu_utilization",
+      "trigger_condition": "avg(system_cpu_utilization) > 0.70 over 10m",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "droplet-cpu",
+      "_message_template": "USE — droplet CPU >70% for 10m. Identify the hot container via docker_stats. Runbook: docs/RUNBOOKS.md#droplet-cpu",
+      "_note": "USE metric from the OTel Collector (hostmetrics). Utilization is a 0-1 fraction. Stream/field name pending live validation."
+    },
+    {
+      "name": "droplet-cpu-critical",
+      "stream": "system_cpu_utilization",
+      "trigger_condition": "avg(system_cpu_utilization) > 0.90 over 10m",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "droplet-cpu",
+      "_message_template": "USE — droplet CPU >90% for 10m. Imminent thrash risk. Restart non-critical containers or scale. Runbook: docs/RUNBOOKS.md#droplet-cpu"
+    },
+    {
+      "name": "container-ram-warning",
+      "stream": "container_memory_percent",
+      "trigger_condition": "container_memory_percent > 80 for 5m (any container)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "container-ram",
+      "_message_template": "USE — [{container_name}] memory >80% of limit for 5m. Odoo workers most likely. Runbook: docs/RUNBOOKS.md#container-ram"
+    },
+    {
+      "name": "container-ram-critical",
+      "stream": "container_memory_percent",
+      "trigger_condition": "container_memory_percent > 95 for 5m (any container)",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "container-ram",
+      "_message_template": "USE — [{container_name}] memory >95% of limit — OOM kill imminent. Restart it. Runbook: docs/RUNBOOKS.md#container-ram"
+    },
+    {
+      "name": "disk-data-warning",
+      "stream": "system_filesystem_utilization",
+      "trigger_condition": "system_filesystem_utilization{mountpoint~=/data|/} > 0.75",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "disk-data",
+      "_message_template": "USE — data filesystem >75% full. MinIO objects or Postgres WAL growing. Clean up or add volume. Runbook: docs/RUNBOOKS.md#disk-data"
+    },
+    {
+      "name": "disk-data-critical",
+      "stream": "system_filesystem_utilization",
+      "trigger_condition": "system_filesystem_utilization{mountpoint~=/data|/} > 0.90",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "disk-data",
+      "_message_template": "USE — data filesystem >90% full — near-full kills MinIO writes + Postgres WAL. Immediate action. Runbook: docs/RUNBOOKS.md#disk-data",
+      "_note": "Tighter than typical (75/90) because MinIO + Postgres WAL fail silently-then-catastrophically when the volume fills. postgres-connections + the RED latency/5xx alerts need the postgresql receiver + Beyla (follow-ups)."
+    },
+    {
+      "name": "odoo-orders-latency-warning",
+      "stream": "http_server_request_duration",
+      "trigger_condition": "p95(http_server_request_duration) where url_path='/grove/api/v1/orders' > 3s over 5m",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-latency",
+      "_message_template": "RED — Odoo /orders p95 >3s over 5m. Check Postgres connections + slow query log. Runbook: docs/RUNBOOKS.md#odoo-latency",
+      "_note": "RED metric from Beyla eBPF (Odoo). Metric stream/field names (http_server_request_duration, url_path) pending live validation on first Beyla run."
+    },
+    {
+      "name": "odoo-orders-latency-critical",
+      "stream": "http_server_request_duration",
+      "trigger_condition": "p95(http_server_request_duration) where url_path='/grove/api/v1/orders' > 8s over 5m",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-latency",
+      "_message_template": "RED — Odoo /orders p95 >8s — orders timing out. Check Postgres locks; restart Odoo if no DB cause. Runbook: docs/RUNBOOKS.md#odoo-latency"
+    },
+    {
+      "name": "odoo-products-latency-warning",
+      "stream": "http_server_request_duration",
+      "trigger_condition": "p95(http_server_request_duration) where url_path='/grove/api/v1/products' > 1s over 5m",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-latency",
+      "_message_template": "RED — Odoo /products p95 >1s. Cache miss or Postgres scan; check KeyDB hit rate. Runbook: docs/RUNBOOKS.md#odoo-latency"
+    },
+    {
+      "name": "odoo-error-rate-warning",
+      "stream": "http_server_request_duration",
+      "trigger_condition": "count(http.response.status_code>=500) / count(*) on Odoo > 1% over 5m",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "odoo-error-rate",
+      "_message_template": "RED — Odoo 5xx rate >1% over 5m. Check Odoo worker logs for Python exceptions. Runbook: docs/RUNBOOKS.md#odoo-error-rate",
+      "_note": "Beyla RED. nextjs-* latency/5xx alerts need Next.js instrumentation.ts (grove-sites) — separate PR."
+    },
+    {
+      "name": "postgres-connections-warning",
+      "stream": "postgresql_backends",
+      "trigger_condition": "postgresql_backends / postgresql_connection_max > 0.70",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "postgres-connections",
+      "_message_template": "USE — Postgres connections >70% of max. Check for idle-in-transaction queries; likely an Odoo worker leak. Runbook: docs/RUNBOOKS.md#postgres-connections",
+      "_note": "USE metric from the OTel Collector `postgresql` receiver — OFF until a read-only pg_monitor user + POSTGRES_* env are set and the receiver is added to the metrics pipeline (see otel/README.md). Stream/field names pending live validation."
+    },
+    {
+      "name": "postgres-connections-critical",
+      "stream": "postgresql_backends",
+      "trigger_condition": "postgresql_backends / postgresql_connection_max > 0.90",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "postgres-connections",
+      "_message_template": "USE — Postgres connections >90% of max — new connections will be refused. Restart Odoo to clear leaked connections. Runbook: docs/RUNBOOKS.md#postgres-connections"
+    },
+    {
+      "name": "app-cpu-warning",
+      "stream": "do_app_cpu_percentage",
+      "trigger_condition": "avg(do_app_cpu_percentage) > 70 over 10m (any app component)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "app-cpu",
+      "_message_template": "USE — App Platform [{app}/{component}] CPU >70% for 10m. Consider a larger instance size or +1 instance. Runbook: docs/RUNBOOKS.md#app-cpu",
+      "_note": "USE metric from the DO-metrics bridge (App Platform). Percentage is 0-100 (NOT the 0-1 hostmetrics fraction). Stream/field name pending live validation."
+    },
+    {
+      "name": "app-cpu-critical",
+      "stream": "do_app_cpu_percentage",
+      "trigger_condition": "avg(do_app_cpu_percentage) > 90 over 10m (any app component)",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "app-cpu",
+      "_message_template": "USE — App Platform [{app}/{component}] CPU >90% for 10m — requests will queue/latency spikes. Scale now. Runbook: docs/RUNBOOKS.md#app-cpu"
+    },
+    {
+      "name": "app-memory-warning",
+      "stream": "do_app_memory_percentage",
+      "trigger_condition": "avg(do_app_memory_percentage) > 80 over 5m (any app component)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "app-memory",
+      "_message_template": "USE — App Platform [{app}/{component}] memory >80% for 5m. Watch for OOM restarts (see app-restarts). Runbook: docs/RUNBOOKS.md#app-memory"
+    },
+    {
+      "name": "app-memory-critical",
+      "stream": "do_app_memory_percentage",
+      "trigger_condition": "avg(do_app_memory_percentage) > 95 over 5m (any app component)",
+      "severity": "critical",
+      "destination": "keep-webhook",
+      "runbook_key": "app-memory",
+      "_message_template": "USE — App Platform [{app}/{component}] memory >95% for 5m — OOM kill imminent. Bump instance size. Runbook: docs/RUNBOOKS.md#app-memory"
+    },
+    {
+      "name": "app-restarts-warning",
+      "stream": "do_app_restart_count",
+      "trigger_condition": "max(do_app_restart_count) > 0 over 10m (any app component)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "app-restarts",
+      "_message_template": "USE — App Platform [{app}/{component}] restarted in the last 10m — possible crash loop or OOM. Check the app's deploy/runtime logs. Runbook: docs/RUNBOOKS.md#app-restarts"
+    },
+    {
+      "name": "rum-lcp-warning",
+      "stream": "rum",
+      "trigger_condition": "p75(web_vitals.value where metric='LCP') > 2500 over 30m (per tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "rum-web-vitals",
+      "_message_template": "RUM — real-user LCP p75 >2.5s over 30m. Largest Contentful Paint is slow; check hero/image payloads + Odoo BFF latency. Runbook: docs/RUNBOOKS.md#rum-web-vitals",
+      "_note": "Real User Monitoring from @grove/analytics (grove-sites). web_vitals events are emitted to OpenObserve RUM via addAction with {metric, value, rating}. CLS value is scaled ×1000. Stream/field names pending live validation on first real RUM traffic."
+    },
+    {
+      "name": "rum-inp-warning",
+      "stream": "rum",
+      "trigger_condition": "p75(web_vitals.value where metric='INP') > 200 over 30m (per tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "rum-web-vitals",
+      "_message_template": "RUM — real-user INP p75 >200ms over 30m. Interaction latency is poor; check hydration cost + heavy client-side handlers. Runbook: docs/RUNBOOKS.md#rum-web-vitals"
+    },
+    {
+      "name": "rum-cls-warning",
+      "stream": "rum",
+      "trigger_condition": "p75(web_vitals.value where metric='CLS') > 100 over 30m (per tenant) — value is scaled ×1000, so 100 == CLS 0.1",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "rum-web-vitals",
+      "_message_template": "RUM — real-user CLS p75 >0.1 over 30m. Layout shift is high; check images/embeds/fonts without reserved space. Runbook: docs/RUNBOOKS.md#rum-web-vitals"
+    },
+    {
+      "name": "rum-purchase-drop-warning",
+      "stream": "rum",
+      "trigger_condition": "count(begin_checkout) >= 5 AND count(purchase) == 0 over 1h (any tenant)",
+      "severity": "warning",
+      "destination": "keep-webhook",
+      "runbook_key": "checkout-broken",
+      "_message_template": "RUM — real users reaching checkout but 0 completed purchases in 1h (≥5 begin_checkout, 0 purchase). The money path may be broken for real traffic — cross-check synthetic-checkout-critical. Runbook: docs/RUNBOOKS.md#checkout-broken",
+      "_note": "Funnel drop from real-user events (begin_checkout → purchase, order_id_hash only — no PII). The real-traffic complement to the synthetic checkout-canary. The ≥5 floor avoids low-traffic false positives; tune once baseline volume is known."
+    }
+  ]
+}

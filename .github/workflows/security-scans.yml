@@ -1,0 +1,255 @@
+# Security scanning suite.
+# Three parallel jobs:
+#   trivy-fs    — filesystem CVE scan (Dockerfiles, requirements, lockfiles)
+#   trivy-image — build and scan each custom Docker image for CVEs
+#   gitleaks    — full-history secret detection
+#
+# Trigger strategy:
+#   * PR + push:main  → trivy-fs + gitleaks (fast, no docker build)
+#   * push:main + cron + manual → trivy-image (heavy; OOMs on PR-trigger
+#     runners when building the full Odoo stack)
+#
+# SARIF results from Trivy upload to GitHub Security → Code Scanning tab.
+# gitleaks fails the build immediately on any secret match.
+---
+name: Security Scans
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly Monday 06:00 UTC — re-scan main against the latest CVE feed
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+# Deny all permissions at the top level; each job grants only what it needs.
+permissions: {}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Trivy filesystem scan
+  # Scans the checked-out repository tree for CVEs in Dockerfiles,
+  # requirements.txt, package.json, etc.
+  # ---------------------------------------------------------------------------
+  trivy-fs:
+    name: Trivy — Filesystem Scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write   # required for SARIF upload
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 5
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        timeout-minutes: 10
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          trivyignores: .trivyignore
+          # Without this, trivy-action's "SARIF is special" code path drops
+          # the --severity filter when building the SARIF report but still
+          # passes --exit-code 1 — so ANY finding of ANY severity (including
+          # mediums and lows) makes the job fail. Setting this routes through
+          # the path that respects severity for both the report contents and
+          # the exit gate, so only HIGH/CRITICAL trigger a failure.
+          limit-severities-for-sarif: "true"
+
+      - name: Upload Trivy filesystem SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        timeout-minutes: 5
+        if: always()   # upload even on failure so findings are always visible
+        with:
+          sarif_file: trivy-fs-results.sarif
+          category: trivy-filesystem
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Trivy image scan
+  # Builds each custom Dockerfile and scans the resulting image for CVEs.
+  # Images: odoo, postgres, pgadmin (all reference build: in compose).
+  # ---------------------------------------------------------------------------
+  trivy-image:
+    name: Trivy — Image Scan
+    # Skipped on PRs: building the Odoo image OOMs the default runner
+    # (buildx dial-stdio SIGKILL). Runs post-merge, on schedule, and manually.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write   # required for SARIF upload
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Scan tags must track what we actually deploy — see .env.example.
+          # When the production ODOO_TAG bumps, update here too.
+          #
+          # ENTERPRISE_ADDONS / THIRD_PARTY_ADDONS must be non-empty for
+          # clone-addons.sh's `mkdir -p` to work under `set -e`. Production
+          # sets these via .env.example to subdirs of ROOT_PATH; here we use
+          # /tmp paths since the CI scan never publishes the resulting image.
+          - service: odoo
+            dockerfile: ./odoo/Dockerfile
+            context: .
+            build-args: |
+              ODOO_TAG=19.0
+              ODOO_RC=/etc/odoo/odoo.conf
+              ROOT_PATH=/odoo
+              ENTERPRISE_USER=
+              ENTERPRISE_ACCESS_TOKEN=
+              ENTERPRISE_ADDONS=/tmp/enterprise-addons
+              GITHUB_USER=
+              GITHUB_ACCESS_TOKEN=
+              THIRD_PARTY_ADDONS=/tmp/third-party-addons
+              LOG_PATH=/var/log/odoo
+              USE_REDIS=false
+              USE_S3=false
+              USE_SENTRY=false
+          - service: postgres
+            dockerfile: ./postgres/Dockerfile
+            context: .
+            build-args: |
+              POSTGRES_TAG=17-alpine
+          # Track the deployed pgadmin major version from .env.example. When
+          # bumping, also update the digest pin in .env.example.
+          - service: pgadmin
+            dockerfile: ./pgadmin/Dockerfile
+            context: .
+            build-args: |
+              PGADMIN_TAG=9.16
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        timeout-minutes: 5
+
+      - name: Build ${{ matrix.service }} image for scanning
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        timeout-minutes: 20
+        env:
+          # Disable the v6 "build summary" post-step. It exports a .dockerbuild
+          # artifact via dial-stdio after the build succeeds, and the cleanup
+          # race-kills its docker socket connection with SIGKILL — which the
+          # action reports as a job failure even though the build + scan have
+          # already completed successfully. Disabling the summary makes the
+          # post-step a no-op.
+          DOCKER_BUILD_SUMMARY: "false"
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: scan-target/${{ matrix.service }}:ci
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy image scan on ${{ matrix.service }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        timeout-minutes: 10
+        with:
+          scan-type: image
+          image-ref: scan-target/${{ matrix.service }}:ci
+          format: sarif
+          output: trivy-image-${{ matrix.service }}-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          trivyignores: .trivyignore
+          # See companion comment on the trivy-fs step. Without this, ANY
+          # finding (mediums, lows, even informational) makes the job fail
+          # because trivy-action drops --severity in SARIF mode but keeps
+          # --exit-code. With this true, only HIGH/CRITICAL trigger failure.
+          limit-severities-for-sarif: "true"
+
+      - name: Upload Trivy image SARIF — ${{ matrix.service }}
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        timeout-minutes: 5
+        if: always()
+        with:
+          sarif_file: trivy-image-${{ matrix.service }}-results.sarif
+          category: trivy-image-${{ matrix.service }}
+
+  # ---------------------------------------------------------------------------
+  # Job 3: gitleaks — secret detection
+  # Full-history scan; fails the build immediately on any leak.
+  # Allowlist is in .gitleaks.toml (example files with placeholder values).
+  #
+  # Uses the OSS gitleaks CLI directly. gitleaks-action v2+ requires a
+  # paid GITLEAKS_LICENSE on organization accounts, but the binary stays MIT.
+  # ---------------------------------------------------------------------------
+  gitleaks:
+    name: gitleaks — Secret Detection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write   # required for SARIF upload
+
+    env:
+      GITLEAKS_VERSION: "8.21.2"
+
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 5
+        with:
+          fetch-depth: 0   # full history required for accurate secret scanning
+
+      - name: Install gitleaks (verify checksum)
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+          # Keep the canonical filename so it matches the checksum line verbatim.
+          curl -fsSL -O "${base}/${tarball}"
+          curl -fsSL -O "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " ${tarball}\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks full-history scan
+        timeout-minutes: 8
+        run: |
+          gitleaks detect \
+            --source . \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose \
+            --exit-code 1 \
+            --report-format sarif \
+            --report-path gitleaks-results.sarif
+
+      - name: Upload gitleaks SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        timeout-minutes: 5
+        if: always()   # upload findings even when scan fails the build
+        with:
+          sarif_file: gitleaks-results.sarif
+          category: gitleaks

@@ -1,0 +1,11 @@
+[Unit]
+Description=Grove Preview — nightly sanitize at 02:00 UTC
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=grove-sanitize.service
+
+[Install]
+WantedBy=timers.target

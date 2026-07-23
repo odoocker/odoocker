@@ -23,10 +23,18 @@ clone_and_copy_modules() {
     shift 2
     local modules_conditions=("$@")
 
+    # ODOO_TAG is image-pinned in .env.example (`19.0@sha256:...`) for supply
+    # chain safety, but git can't accept a SHA-digest-suffixed string as a
+    # branch name. Strip the @sha256:... suffix to get the real branch.
+    # Without this strip every clone falls through to --branch main (or fails
+    # outright), silently shipping the image without 2 of 3 third-party
+    # addon sets — verified by P2.1's validate-third-party-addons CI job.
+    local odoo_branch="${ODOO_TAG%%@*}"
+
     # Clone and copy logic for enterprise repository
     if [[ $repo_type == "enterprise" ]]; then
         if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_ACCESS_TOKEN" ]; then
-            $clone_cmd --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags
+            $clone_cmd --depth 1 --branch ${odoo_branch} --single-branch --no-tags
         fi
     else
         # Determine if any module has a true condition
@@ -42,19 +50,33 @@ clone_and_copy_modules() {
             done
         fi
 
-        # Clone the repo if should_clone is true and it's not already cloned
+        # Clone the repo if should_clone is true and it's not already cloned.
+        # Uses odoo_branch (with @sha256:... stripped above) instead of raw ODOO_TAG.
         if [[ $should_clone == true && ! -d "$repo_name" ]]; then
-            $clone_cmd --depth 1 --branch ${ODOO_TAG} --single-branch --no-tags
+            if ! $clone_cmd --depth 1 --branch ${odoo_branch} --single-branch --no-tags 2>/dev/null; then
+                echo "WARN: branch ${odoo_branch} not found for ${repo_name}, trying main..."
+                $clone_cmd --depth 1 --branch main --single-branch --no-tags 2>/dev/null || \
+                echo "WARN: skipping ${repo_name} — no compatible branch found"
+            fi
         fi
 
-        # Copy the modules if the condition is true
+        # Copy the modules if the condition is true.
+        # Guarded against missing /${repo_name} so a clone that fell through
+        # both --branch ${ODOO_TAG} and --branch main (and printed a WARN
+        # above) doesn't blow up the whole build via `cp` + `set -e`. The
+        # missing-module log is ERROR-level so production build logs make it
+        # easy to grep `^ERROR:` and verify every expected addon shipped.
         if [[ $should_clone == true ]]; then
             for (( i=0; i<${#modules_conditions[@]}; i+=2 )); do
                 local module=${modules_conditions[i]}
                 local condition=${modules_conditions[i+1]}
                 if [[ $condition == true ]]; then
-                    echo "Copying ${module} from ${repo_name} into ${THIRD_PARTY_ADDONS}"
-                    cp -r /${repo_name}/${module} ${THIRD_PARTY_ADDONS}/${module}
+                    if [ -d "/${repo_name}/${module}" ]; then
+                        echo "Copying ${module} from ${repo_name} into ${THIRD_PARTY_ADDONS}"
+                        cp -r "/${repo_name}/${module}" "${THIRD_PARTY_ADDONS}/${module}"
+                    else
+                        echo "ERROR: module ${module} not found at /${repo_name}/${module} — clone of ${repo_name} likely failed or branch lacks this module. Skipping." >&2
+                    fi
                 fi
             done
         fi

@@ -1,0 +1,7 @@
+# supercronic crontab for the Grove DO App Platform metrics bridge.
+# Every 2 min: pull App Platform CPU%/memory%/restart_count for each app and
+# ship OTLP gauges to OpenObserve. 2 min (not hourly like the cost bridge)
+# because these are USE metrics — you want recent saturation + crash-loop
+# signal, and DO reports app metrics at ~2 min resolution. No-op when
+# DO_METRICS_ENABLED!=true.
+*/2 * * * * python3 /app/do_metrics_bridge.py

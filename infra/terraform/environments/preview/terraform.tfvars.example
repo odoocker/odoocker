@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars and fill in for manual local apply.
+# terraform.tfvars is git-ignored (per repo root .gitignore).
+#
+# In CI, all of these are supplied by preview-up.yml (Task 3.3), so this
+# file is only for the manual smoke-test path (Task 2.8).
+
+pr_number = 999
+pr_branch = "feat/example-branch"
+
+frontend_image_tags = {
+  hub       = "latest"
+  goldberry = "latest"
+  ggg       = "latest"
+  nursery   = "latest"
+}
+odoo_image_tag = "latest"
+snapshot_date  = "2026-06-01"
+
+ssh_key_fingerprint = "REPLACE_ME" # `doctl compute ssh-key list --format Name,FingerPrint`
+admin_ip_cidr       = "REPLACE_ME" # e.g. "203.0.113.42/32" (your /32) — get from $(curl -s ifconfig.me)
+
+ghost_content_keys = {
+  goldberry = "REPLACE_ME"
+  ggg       = "REPLACE_ME"
+  nursery   = "REPLACE_ME"
+}
+
+# Sensitive vars come from env, NOT from this file:
+#   TF_VAR_do_token=$(op read "op://Goldberry Grove - Admin/GoldberryGrove Infra/do_token")
+#   TF_VAR_spaces_access_key=$(op read "op://Goldberry Grove - Admin/GoldberryGrove Infra/spaces_bootstrap_access_key_id")
+#   TF_VAR_spaces_secret_key=$(op read "op://Goldberry Grove - Admin/GoldberryGrove Infra/spaces_bootstrap_secret_key")
+#
+# Or use the op-run pattern that state-backend established — drop the above
+# 3 lines into .env.op and invoke `op run --env-file=.env.op -- terraform apply`.

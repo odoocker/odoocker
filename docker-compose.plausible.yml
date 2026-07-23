@@ -1,0 +1,110 @@
+###############################################################################
+# Grove analytics — self-hosted Plausible (Community Edition)
+#
+# The privacy-first, cookieless half of the @grove/analytics dual-writer
+# (spec docs/specs/2026-06-26-grove-observability-design.md §2 RUM). The Next.js
+# frontends POST pageviews + funnel events to this instance's /api/event;
+# OpenObserve RUM is the other sink.
+#
+# Three containers: the Plausible app + its OWN Postgres (metadata) + ClickHouse
+# (events). Self-contained — it does NOT reuse odoocker's Odoo Postgres
+# (Plausible pins PG 16; Odoo runs 17) — but joins the shared internal network
+# so Caddy can proxy plausible.<domain> → plausible:8000.
+#
+# Lifecycle: independent of the main + monitoring stacks (analytics has its own
+# cadence). Bring it up with:
+#   docker compose -f docker-compose.plausible.yml --env-file .env.plausible up -d
+#
+# ClickHouse is memory-hungry: the ./plausible/clickhouse/*.xml configs trim its
+# logging + resource use for a small droplet. They're vendored verbatim from the
+# plausible/community-edition repo — see plausible/README.md.
+###############################################################################
+
+name: gatheratthegrove-plausible
+
+networks:
+  internal:
+    # Join the network the main odoocker stack creates (external: true → this
+    # compose won't create it). Caddy lives here too and proxies to plausible.
+    name: gatheratthegrove_internal
+    external: true
+
+volumes:
+  plausible-db-data:
+  plausible-event-data:
+  plausible-event-logs:
+  plausible-data:
+
+services:
+  # ── Postgres — Plausible metadata (users, sites, settings) ────────────────
+  plausible_db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${PLAUSIBLE_POSTGRES_PASSWORD}
+    volumes:
+      - plausible-db-data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      start_period: 1m
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── ClickHouse — Plausible event store ────────────────────────────────────
+  plausible_events_db:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    volumes:
+      - plausible-event-data:/var/lib/clickhouse
+      - plausible-event-logs:/var/log/clickhouse-server
+      # Low-footprint tuning (vendored from plausible/community-edition):
+      - ./plausible/clickhouse/logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
+      - ./plausible/clickhouse/ipv4-only.xml:/etc/clickhouse-server/config.d/ipv4-only.xml:ro
+      - ./plausible/clickhouse/low-resources.xml:/etc/clickhouse-server/config.d/low-resources.xml:ro
+      - ./plausible/clickhouse/default-profile-low-resources-overrides.xml:/etc/clickhouse-server/users.d/default-profile-low-resources-overrides.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 -O - http://127.0.0.1:8123/ping || exit 1"]
+      start_period: 1m
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Plausible app ─────────────────────────────────────────────────────────
+  plausible:
+    image: ghcr.io/plausible/community-edition:${PLAUSIBLE_TAG:-v3.2.1}
+    restart: unless-stopped
+    # createdb + migrate are idempotent — safe to run on every boot.
+    command: sh -c "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
+    depends_on:
+      plausible_db:
+        condition: service_healthy
+      plausible_events_db:
+        condition: service_healthy
+    environment:
+      BASE_URL: ${PLAUSIBLE_BASE_URL}
+      SECRET_KEY_BASE: ${PLAUSIBLE_SECRET_KEY_BASE}
+      TOTP_VAULT_KEY: ${PLAUSIBLE_TOTP_VAULT_KEY}
+      DISABLE_REGISTRATION: ${PLAUSIBLE_DISABLE_REGISTRATION:-invite_only}
+      DATABASE_URL: postgres://postgres:${PLAUSIBLE_POSTGRES_PASSWORD}@plausible_db:5432/plausible_db
+      CLICKHOUSE_DATABASE_URL: http://plausible_events_db:8123/plausible_events_db
+    volumes:
+      - plausible-data:/var/lib/plausible
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    ports:
+      - "${PLAUSIBLE_PORT:-8000}:8000"
+    networks:
+      - internal

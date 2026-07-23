@@ -1,0 +1,139 @@
+name: Infracost
+
+# Comments the $/mo cost delta on PRs that touch infra/terraform/ — shift-left
+# CostOps (spec §6, Sprint 2): catch a "+$40/mo" droplet resize in review, not on
+# the next DO invoice. Pairs with the runtime DO-billing bridge (actuals) — this
+# is the pre-merge estimate.
+#
+# ── PREREQ (operator setup — NOT yet done; this workflow fails until it is) ──
+# Seed INFRACOST_API_KEY in Infisical grove-odoocker /prod. The key is free:
+# `infracost auth login` (or https://dashboard.infracost.io) → copy the key →
+# add it as INFRACOST_API_KEY. It's a pricing-DB lookup key, not a cloud
+# credential. Same self-documenting-prereq pattern as terraform-drift.yml.
+#
+# ── No DO creds needed ──
+# Infracost parses the Terraform HCL directly (no `terraform init` / no provider
+# auth), pricing droplet / volume / managed-database resources from the config.
+# App Platform apps (digitalocean_app) aren't in Infracost's price DB yet → shown
+# as "not estimated"; the droplet/PG/volume deltas are what this catches.
+# Which envs get priced: infra/infracost.yml.
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - "infra/infracost.yml"
+      - ".github/workflows/infracost.yml"
+
+permissions: {}
+
+jobs:
+  infracost:
+    name: Infracost diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      pull-requests: write   # post/update the single cost comment
+      id-token: write        # OIDC → Infisical (per ADR 003; NEVER secrets.*)
+
+    env:
+      # Shared OIDC identity — same one terraform-drift.yml / sandbox-*.yml use.
+      # See infra/terraform/environments/infisical-identities/README.md.
+      INFISICAL_PROJECT_SLUG: grove-odoocker-qu8p
+      INFISICAL_ENV_SLUG: prod
+      INFISICAL_IDENTITY_ID: c502a60d-4b37-4e15-9fd7-8186c80c2ad0
+
+    steps:
+      # Fetch INFRACOST_API_KEY from Infisical via GitHub OIDC (exports it as an
+      # env var for later steps). id-token: write mints the JWT for the exchange.
+      - name: Fetch secrets from Infisical (OIDC)
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        timeout-minutes: 2
+        with:
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV_SLUG }}
+          secret-path: /
+          export-type: env
+
+      # Skip gracefully (job stays green) until INFRACOST_API_KEY is seeded in
+      # Infisical. A required check must not block merges before the key exists;
+      # once it's present every pricing step below runs. INFRACOST_API_KEY is
+      # exported to the job env by the Infisical fetch step above (or simply
+      # absent if not yet seeded).
+      - name: Gate on the Infracost API key
+        id: gate
+        timeout-minutes: 1
+        run: |
+          if [ -n "$INFRACOST_API_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::INFRACOST_API_KEY not set in Infisical — skipping the cost diff. Seed it in grove-odoocker /prod to enable."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Install the Infracost CLI via the official script (no third-party action
+      # to SHA-pin). The version is resolved with the AUTHENTICATED gh CLI — the
+      # install script's own unauthenticated GitHub API call to find the latest
+      # release gets rate-limited in CI ("Failed to fetch the latest release
+      # tag"). `configure set` stores the key in ~/.config, never in argv/logs.
+      - name: Install Infracost
+        if: steps.gate.outputs.enabled == 'true'
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(gh release view --repo infracost/infracost --json tagName --jq .tagName)"
+          curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh \
+            | INFRACOST_VERSION="${version#v}" sh
+          infracost configure set api_key "$INFRACOST_API_KEY"
+
+      # Baseline: price the base branch first so the PR can be diffed against it.
+      - name: Checkout base branch
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Infracost baseline (base branch)
+        if: steps.gate.outputs.enabled == 'true'
+        timeout-minutes: 5
+        run: |
+          infracost breakdown \
+            --config-file=infra/infracost.yml \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
+
+      # Switch to the PR HEAD and diff against the baseline.
+      - name: Checkout PR branch
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      - name: Infracost diff (PR vs base)
+        if: steps.gate.outputs.enabled == 'true'
+        timeout-minutes: 5
+        run: |
+          infracost diff \
+            --config-file=infra/infracost.yml \
+            --compare-to=/tmp/infracost-base.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
+
+      # Post (or update-in-place) one cost comment on the PR.
+      - name: Post cost comment
+        if: steps.gate.outputs.enabled == 'true'
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          infracost comment github \
+            --path=/tmp/infracost.json \
+            --repo="$GITHUB_REPOSITORY" \
+            --github-token="$GH_TOKEN" \
+            --pull-request="$PR_NUMBER" \
+            --behavior=update

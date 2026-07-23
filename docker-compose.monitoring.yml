@@ -1,0 +1,257 @@
+###############################################################################
+# Grove monitoring stack — OpenObserve + Keep
+#
+# OpenObserve handles detection (synthetic HTTP monitors, threshold alerts,
+# logs/metrics/traces ingestion, dashboards). Keep handles routing (alert
+# dedup, severity → Discord channel, runbook-link injection).
+#
+# Storage: OpenObserve writes Parquet to the existing odoocker MinIO `s3`
+# service (joined via the `gatheratthegrove_internal` external network).
+# Keep uses local SQLite for its workflow state (small footprint; swap to
+# Postgres if multi-user need arises).
+#
+# Notifications: Discord webhooks (warning + critical channels). PagerDuty
+# deferred until a production droplet exists (M2 milestone).
+#
+# Lifecycle: independent of the main grove stack. `make monitoring-up` brings
+# this up; `make all-up` does not (intentionally — observability has its own
+# cadence and shouldn't churn with backend restarts).
+#
+# Acceptance for GATH-44 verified by scripts/smoke-test-monitoring.sh which
+# kills gatheratthegrove-odoo-1 and polls for Discord alert <2 min.
+###############################################################################
+
+name: gatheratthegrove-monitoring
+
+networks:
+  internal:
+    # Reuse the network the main odoocker stack creates. `external: true` means
+    # this compose project doesn't try to create it — it joins the existing one.
+    # If you `make monitoring-up` before `make stack-up`, this fails with
+    # "network not found" — that's by design (monitoring has nothing useful to
+    # monitor without the main stack).
+    name: gatheratthegrove_internal
+    external: true
+
+services:
+  # ── OpenObserve — single-binary observability platform ────────────────────
+  # Replaces LGTM (Loki + Grafana + Tempo + Mimir) + Uptime Kuma in one process.
+  # Synthetic HTTP monitors, native alerting (built-in Slack/Discord/webhook
+  # outputs), dashboards, Parquet-on-S3 storage.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:${OPENOBSERVE_TAG:-v0.91.1@sha256:e1ff0445fab3e748ac4cf630308cc8493579e50d19ad255bb3a3b8c1b710aaf7}
+    restart: unless-stopped
+    environment:
+      # Auth — root user provisioned on first boot.
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD}
+      # Storage — Parquet to MinIO via the shared internal network.
+      # Same config travels to prod by changing ZO_S3_SERVER_URL only
+      # (DO Spaces is S3-compatible). Endpoint is the odoocker `s3` service
+      # by DNS name; no host.docker.internal indirection.
+      ZO_S3_PROVIDER: s3
+      ZO_S3_SERVER_URL: http://s3:9000
+      ZO_S3_REGION_NAME: us-east-1
+      ZO_S3_BUCKET_NAME: openobserve-data
+      ZO_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      ZO_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      ZO_S3_FORCE_PATH_STYLE: "true"  # MinIO needs path-style; DO Spaces supports both
+      # Behavior
+      ZO_TELEMETRY: "false"  # don't phone home
+      ZO_PROMETHEUS_ENABLED: "true"
+      ZO_LOCAL_MODE: ${OPENOBSERVE_LOCAL_MODE:-true}  # single-node; prod can set false + add etcd for HA
+    ports:
+      - "${OPENOBSERVE_PORT:-5080}:5080"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5080/healthz", "||", "exit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ── Keep — alert routing + workflow engine ────────────────────────────────
+  # Receives alerts from OpenObserve via webhook, deduplicates, applies
+  # severity routing (warning → Discord warning channel; critical →
+  # Discord critical channel with @here), injects runbook links from
+  # docs/RUNBOOKS.md. Future GATH-23 additions (Prometheus alerts, Loki
+  # alerts) plug in here without rewiring downstream Discord channels.
+  keep-backend:
+    image: us-central1-docker.pkg.dev/keephq/keep/keep-api:${KEEP_TAG:-v0.54.1}
+    restart: unless-stopped
+    environment:
+      # Storage — SQLite for the MVP (single-user, small footprint).
+      # Swap to Postgres when multi-user / multi-tenant is needed.
+      DATABASE_CONNECTION_STRING: sqlite:////app/data/keep.db
+      # API/Frontend wiring
+      AUTH_TYPE: ${KEEP_AUTH_TYPE:-NO_AUTH}  # local dev = NO_AUTH; prod MUST set KEEP_AUTH_TYPE (e.g. DB)
+      KEEP_API_URL: http://keep-backend:8080
+      PORT: 8080
+      # Webhook the OpenObserve→Keep bridge POSTs alerts to.
+      WEBHOOK_TOKEN: ${KEEP_WEBHOOK_TOKEN}
+      # Frontend URL (where runbook links resolve from)
+      FRONTEND_URL: http://localhost:${KEEP_PORT:-3034}
+    volumes:
+      - keep-data:/app/data
+    ports:
+      - "${KEEP_BACKEND_PORT:-8080}:8080"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthcheck", "||", "exit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  keep-frontend:
+    image: us-central1-docker.pkg.dev/keephq/keep/keep-ui:${KEEP_TAG:-v0.54.1}
+    restart: unless-stopped
+    depends_on:
+      - keep-backend
+    environment:
+      API_URL: http://keep-backend:8080
+      NEXTAUTH_SECRET: ${KEEP_NEXTAUTH_SECRET}
+      NEXTAUTH_URL: http://localhost:${KEEP_PORT:-3034}
+      NEXT_PUBLIC_API_URL: http://localhost:${KEEP_BACKEND_PORT:-8080}
+      AUTH_TYPE: ${KEEP_AUTH_TYPE:-NO_AUTH}
+    ports:
+      - "${KEEP_PORT:-3034}:3000"
+    networks:
+      - internal
+
+  # ── synthetic-runner — Tier-1 Hurl journeys ───────────────────────────────
+  # supercronic runs the Hurl journeys every 60s against the live grove_headless
+  # API (Odoo by service-name DNS on this shared network) and ships pass/fail +
+  # latency to OpenObserve as OTLP metrics. The synthetic-* alert rules query
+  # those metric streams. See synthetic/README.md.
+  synthetic-runner:
+    build:
+      context: ./synthetic
+    restart: unless-stopped
+    depends_on:
+      - openobserve
+    environment:
+      SYNTHETIC_ODOO_BASE: ${SYNTHETIC_ODOO_BASE:-http://odoo:8069}
+      SYNTHETIC_TENANTS: ${SYNTHETIC_TENANTS:-goldberry,ggg,nursery}
+      SYNTHETIC_ENV: ${SYNTHETIC_ENV:-local}
+      OPENOBSERVE_OTLP_METRICS_URL: ${OPENOBSERVE_OTLP_METRICS_URL:-http://openobserve:5080/api/default/v1/metrics}
+      OPENOBSERVE_ROOT_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      OPENOBSERVE_ROOT_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD}
+      # checkout-canary (opt-in money-path journey + XML-RPC seed/cleanup)
+      SYNTHETIC_CANARY_ENABLED: ${SYNTHETIC_CANARY_ENABLED:-false}
+      ODOO_XMLRPC_URL: ${ODOO_XMLRPC_URL:-http://odoo:8069}
+      ODOO_DB: ${ODOO_DB:-}
+      ODOO_LOGIN: ${ODOO_LOGIN:-}
+      SYNTHETIC_ODOO_API_KEY: ${SYNTHETIC_ODOO_API_KEY:-}
+      # ghost-content (opt-in per-tenant Ghost Content API checks)
+      SYNTHETIC_GHOST_ENABLED: ${SYNTHETIC_GHOST_ENABLED:-false}
+      GHOST_URL_GOLDBERRY: ${GHOST_URL_GOLDBERRY:-}
+      GHOST_KEY_GOLDBERRY: ${GHOST_KEY_GOLDBERRY:-}
+      GHOST_URL_GGG: ${GHOST_URL_GGG:-}
+      GHOST_KEY_GGG: ${GHOST_KEY_GGG:-}
+      GHOST_URL_NURSERY: ${GHOST_URL_NURSERY:-}
+      GHOST_KEY_NURSERY: ${GHOST_KEY_NURSERY:-}
+    networks:
+      - internal
+
+  # ── cost-bridge — CostOps DO billing → OpenObserve ────────────────────────
+  # supercronic runs the DO billing bridge hourly: pulls account balance +
+  # resource inventory from the DigitalOcean API and ships cost as OTLP metrics.
+  # The cost-* alert rules query those streams. Opt-in (needs a DO token) and
+  # cloud-only — no-op locally. See cost/README.md.
+  cost-bridge:
+    build:
+      context: ./cost
+    restart: unless-stopped
+    depends_on:
+      - openobserve
+    environment:
+      COST_BRIDGE_ENABLED: ${COST_BRIDGE_ENABLED:-false}
+      DO_API_TOKEN: ${DO_API_TOKEN:-}
+      COST_ENV: ${COST_ENV:-${SYNTHETIC_ENV:-local}}
+      OPENOBSERVE_OTLP_METRICS_URL: ${OPENOBSERVE_OTLP_METRICS_URL:-http://openobserve:5080/api/default/v1/metrics}
+      OPENOBSERVE_ROOT_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      OPENOBSERVE_ROOT_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD}
+    networks:
+      - internal
+
+  # ── do-metrics-bridge — App Platform USE metrics → OpenObserve ────────────
+  # supercronic runs every 2 min: pulls CPU%/memory%/restart_count for each App
+  # Platform app from the DO Monitoring API and ships OTLP gauges. Closes the USE
+  # gap the Collector's docker_stats can't reach (frontends have no host/socket).
+  # The app-* alert rules query those streams. Opt-in (needs a DO token) and
+  # cloud-only — no-op locally. See do-metrics/README.md.
+  do-metrics-bridge:
+    build:
+      context: ./do-metrics
+    restart: unless-stopped
+    depends_on:
+      - openobserve
+    environment:
+      DO_METRICS_ENABLED: ${DO_METRICS_ENABLED:-false}
+      DO_API_TOKEN: ${DO_API_TOKEN:-}
+      COST_ENV: ${COST_ENV:-${SYNTHETIC_ENV:-local}}
+      DO_METRICS_LOOKBACK_SECONDS: ${DO_METRICS_LOOKBACK_SECONDS:-600}
+      OPENOBSERVE_OTLP_METRICS_URL: ${OPENOBSERVE_OTLP_METRICS_URL:-http://openobserve:5080/api/default/v1/metrics}
+      OPENOBSERVE_ROOT_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      OPENOBSERVE_ROOT_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD}
+    networks:
+      - internal
+
+  # ── otel-collector — USE/infra metrics → OpenObserve ──────────────────────
+  # Scrapes host CPU/RAM/disk (hostmetrics via /hostfs) + per-container CPU/RAM
+  # (docker_stats via the socket) and ships OTLP metrics to OpenObserve. These
+  # are the USE metrics the CostOps rightsizing dashboard joins with cost.
+  # See otel/README.md. Contrib image = the receivers/basicauth extension.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:${OTELCOL_TAG:-0.115.0}
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    depends_on:
+      - openobserve
+    environment:
+      OPENOBSERVE_OTLP_BASE: ${OPENOBSERVE_OTLP_BASE:-http://openobserve:5080/api/default}
+      OPENOBSERVE_ROOT_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      OPENOBSERVE_ROOT_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD}
+      COST_ENV: ${COST_ENV:-${SYNTHETIC_ENV:-local}}
+      # postgresql receiver (opt-in — unused until enabled in the config pipeline)
+      POSTGRES_ENDPOINT: ${POSTGRES_ENDPOINT:-}
+      POSTGRES_MONITOR_USER: ${POSTGRES_MONITOR_USER:-}
+      POSTGRES_MONITOR_PASSWORD: ${POSTGRES_MONITOR_PASSWORD:-}
+    volumes:
+      - ./otel/otelcol-config.yaml:/etc/otelcol/config.yaml:ro
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - internal
+
+  # ── beyla — eBPF RED metrics for Odoo (zero-code) ─────────────────────────
+  # Grafana Beyla attaches eBPF probes to the Odoo process (by listen port,
+  # via pid:host) and emits RED metrics (rate/error/p50/p95/p99 per HTTP route)
+  # with ZERO Odoo code changes. Exports OTLP to the local otel-collector, which
+  # forwards to OpenObserve. Single sidecar — Odoo only (Managed Postgres has no
+  # kernel access; its stats come from the Collector's postgresql receiver).
+  # eBPF needs a Linux host + a compatible kernel; if it can't attach it logs
+  # and produces no metrics (never crashes the stack). See otel/README.md.
+  beyla:
+    image: grafana/beyla:${BEYLA_TAG:-1.9.4}
+    restart: unless-stopped
+    privileged: true
+    pid: host
+    depends_on:
+      - otel-collector
+    environment:
+      BEYLA_OPEN_PORT: "8069" # instrument the Odoo WSGI listener
+      OTEL_SERVICE_NAME: odoo
+      BEYLA_SERVICE_NAMESPACE: grove
+      BEYLA_METRICS_INTERVAL: 30s
+      BEYLA_OTEL_METRICS_FEATURES: application,application_span
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+    networks:
+      - internal
+
+volumes:
+  keep-data:

@@ -1,0 +1,21 @@
+# Sandbox environment — example variable values
+# Copy to terraform.tfvars (git-ignored) or pass via -var flags / TF_VAR_ env vars.
+
+# Full 40-char Git SHA of the commit to deploy
+git_sha = "abc1234def5678abc1234def5678abc1234def56"
+
+# DigitalOcean region slug (default: nyc3)
+region = "nyc3"
+
+# One or more SSH key fingerprints or numeric IDs from your DO account.
+# List keys: doctl compute ssh-key list
+ssh_key_ids = [
+  "12:34:56:78:9a:bc:de:f0:12:34:56:78:9a:bc:de:f0",
+]
+
+# Repo URL (default is the Goldberry Playground org repo — override for forks)
+# repo_url = "https://github.com/Goldberry-Playground/odoocker-goldberrygrove.git"
+
+# ⚠️  SECURITY — If you uncomment admin_cidr below, replace with your real CIDR (e.g., "203.0.113.42/32").
+# The 0.0.0.0/0 default is ONLY appropriate for ephemeral sandbox Droplets.
+# admin_cidr = "0.0.0.0/0"

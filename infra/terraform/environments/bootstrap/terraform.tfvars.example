@@ -1,0 +1,30 @@
+# Copy to terraform.tfvars (git-ignored) and fill in real values.
+# Or set everything via TF_VAR_<name> environment variables — preferred for
+# the sensitive fields since shell history is easier to clear than a file.
+#
+# All credentials below are sensitive — strongly prefer environment variables.
+# The canonical source is the GoldberryGrove Infra 1Password item; the
+# state-backend env's .env.op shows the same fetch pattern. Ghost API keys
+# come from each Ghost site's Admin → Integrations panel.
+
+# --- sensitive (use TF_VAR_* env vars in practice) ---
+# do_token             = "dop_v1_..."
+# cloudflare_api_token = "..."
+# github_token         = "ghp_..."
+# discord_ops_webhook  = "https://discord.com/api/webhooks/..."
+# ghost_key_goldberry  = "<content-api-key from blog.goldberrygrove.farm Ghost Admin>"
+# ghost_key_ggg        = "<content-api-key from blog.woodworkingeorge.com Ghost Admin>"
+# ghost_key_nursery    = "<content-api-key from blog.atthegrovenursery.com Ghost Admin>"
+
+# --- non-sensitive operator input (required, no defaults) ---
+admin_ip_cidr = "203.0.113.42/32" # replace with `curl ifconfig.me`/32
+
+# --- layout overrides (uncomment to override the defaults baked into variables.tf) ---
+# github_secrets_repo       = "Goldberry-Playground/grove-sites"
+# cloudflare_zone_name      = "gatheringatthegrove.com"
+# preview_subdomain         = "preview"
+# region                    = "nyc3"
+# bucket_name               = "grove-preview-data"
+# lifecycle_expiration_days = 7
+# ssh_public_key_path       = "~/.ssh/grove-preview-deploy.pub"
+# ssh_private_key_path      = "~/.ssh/grove-preview-deploy"

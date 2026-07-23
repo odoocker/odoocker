@@ -1,0 +1,16 @@
+# Operator template. Copy to terraform.tfvars (git-ignored) ONLY if you need
+# to override one of the defaults declared in variables.tf. In normal use the
+# defaults + env-injected TF_VAR_infisical_admin_* (via op run) are enough
+# and you don't need a tfvars file at all.
+
+# Override only if the Infisical org or project ever changes:
+# infisical_org_id            = "..."
+# grove_odoocker_project_uuid = "..."
+
+# Override only if forking this env for a different GitHub repo:
+# github_repo_full_name = "..."
+# github_branch         = "..."
+
+# Override only if you need shorter/longer access token lifetimes:
+# access_token_ttl_seconds     = 600
+# access_token_max_ttl_seconds = 1800

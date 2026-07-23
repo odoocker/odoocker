@@ -1,0 +1,11 @@
+# Trivy ignore file — odoocker-goldberrygrove
+#
+# Format: one CVE ID per line. Optional `exp:YYYY-MM-DD` suffix sets an
+# expiration after which Trivy re-flags the entry, forcing a periodic re-review.
+#
+# Scope ignores as tightly as possible. Each entry must be justified by a
+# comment immediately above it explaining:
+#   1. why the CVE doesn't apply (or is mitigated) in our deployment
+#   2. the expected fix path (upstream patch, base image rev, removal of dep)
+#
+# Reference: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/

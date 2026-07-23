@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill ONLY if you need to override defaults.
+# terraform.tfvars is git-ignored.
+#
+# Provider credentials (do_token, github_token) should NEVER live in a tfvars
+# file — fetch them from 1Password at apply time via the Makefile targets:
+#
+#   op run --env-file=.env.op -- make state-backend-apply
+#
+# That injects them as TF_VAR_do_token and TF_VAR_github_token without ever
+# materializing the values in shell scrollback, history, or this file.
+
+# Optional overrides (defaults are usually right):
+# region              = "nyc3"
+# bucket_name         = "grove-tf-state"
+# github_secrets_repo = "Goldberry-Playground/odoocker-goldberrygrove"

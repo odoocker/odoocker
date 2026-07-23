@@ -1,0 +1,64 @@
+name: Sync new GitHub issues → Paperclip
+
+# GitHub → Paperclip leg of the bidirectional issue sync (Step 9). On a NEW
+# GitHub issue, fire a Paperclip routine webhook (HMAC-signed, through Cloudflare
+# Access) that creates a mirrored Paperclip issue in the synced project. The
+# Paperclip→GitHub leg is the github-sync-plugin (event-driven). See
+# docs/runbooks/github-issue-sync.md.
+#
+# Loop prevention: issues the github-sync-plugin OPENS here carry the
+# `synced-from-paperclip` label — the `if:` below skips them so a plugin-created
+# GitHub issue never bounces back into Paperclip as a new issue.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  to-paperclip:
+    name: Mirror issue into Paperclip
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Skip issues the sync plugin itself created (loop prevention).
+    if: ${{ !contains(github.event.issue.labels.*.name, 'synced-from-paperclip') }}
+    steps:
+      - name: Fire Paperclip routine webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.PAPERCLIP_ISSUE_SYNC_WEBHOOK }}
+          HMAC_SECRET: ${{ secrets.PAPERCLIP_ISSUE_SYNC_SECRET }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # Untrusted inputs — bound to env vars and only ever passed to jq as
+          # DATA via --arg (never interpolated into the shell), so a malicious
+          # issue title/body cannot inject commands.
+          GH_REPO: ${{ github.repository }}
+          GH_NUMBER: ${{ github.event.issue.number }}
+          GH_TITLE: ${{ github.event.issue.title }}
+          GH_BODY: ${{ github.event.issue.body }}
+          GH_URL: ${{ github.event.issue.html_url }}
+        run: |
+          # No-op until the webhook is configured (secrets unset) — safe to merge
+          # before the routine/secrets exist.
+          if [ -z "$WEBHOOK_URL" ] || [ -z "$HMAC_SECRET" ]; then
+            echo "Paperclip issue-sync webhook not configured (secrets unset) — skipping."
+            exit 0
+          fi
+          # jq --arg keeps title/body as data; the payload is compact + stable so
+          # the HMAC matches the exact bytes sent.
+          PAYLOAD=$(jq -nc \
+            --arg repo "$GH_REPO" \
+            --arg number "$GH_NUMBER" \
+            --arg title "$GH_TITLE" \
+            --arg body "${GH_BODY:-}" \
+            --arg url "$GH_URL" \
+            '{kind:"github_issue_opened", repo:$repo, number:$number, title:$title, body:$body, url:$url}')
+          SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$HMAC_SECRET" -hex | sed 's/^.*= //')
+          curl -fsS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=$SIG" \
+            -H "CF-Access-Client-Id: $CF_ID" \
+            -H "CF-Access-Client-Secret: $CF_SECRET" \
+            --data "$PAYLOAD"

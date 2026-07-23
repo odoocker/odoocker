@@ -1,0 +1,85 @@
+name: CI Failure Notify
+
+###############################################################################
+# One notifier for every remaining CI workflow's MAIN-BRANCH failures --
+# fills the gap left by retiring the monolith pipeline (which was the only
+# thing that spoke Discord). PR failures stay out of Discord on purpose:
+# they're visible in the PR UI and would be pure noise.
+#
+# Uses discord-status.sh's streak grammar keyed to the SOURCE workflow, so
+# "docker-odoo failed 3x in a row" escalates with @here exactly like the
+# old deploy alerts did, and the first green run posts RECOVERED.
+###############################################################################
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Security Scans
+      - "Docker — Odoo"
+      - "Docker -- Caddy w/ DO DNS plugin"
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-failure-notify-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    name: Discord on main-branch failure/recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Run for BOTH conclusions: failures alert; successes let the script
+    # post RECOVERED when they break a streak (and stay silent otherwise
+    # via --quiet-success).
+    if: github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success'
+
+    permissions:
+      contents: read
+      id-token: write   # OIDC for Infisical (webhook URL)
+      actions: read     # streak history of the SOURCE workflow
+
+    env:
+      INFISICAL_PROJECT_SLUG: grove-odoocker-qu8p
+      INFISICAL_ENV_SLUG: prod
+      INFISICAL_IDENTITY_ID: c502a60d-4b37-4e15-9fd7-8186c80c2ad0
+      # workflow_run payload fields are repo-defined (workflow name) or
+      # GitHub-generated (conclusion, urls) -- passed via env regardless,
+      # per the injection-safe pattern.
+      SRC_NAME: ${{ github.event.workflow_run.name }}
+      SRC_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      SRC_URL: ${{ github.event.workflow_run.html_url }}
+      SRC_PATH: ${{ github.event.workflow_run.path }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      - name: Fetch secrets from Infisical (OIDC)
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        timeout-minutes: 2
+        with:
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV_SLUG }}
+          secret-path: /
+          export-type: env
+
+      - name: Discord
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # streak detection keys on the workflow FILE name
+          WF_FILE=$(basename "$SRC_PATH")
+          bash scripts/discord-status.sh \
+            --status="$SRC_CONCLUSION" \
+            --workflow="$WF_FILE" \
+            --run-url="$SRC_URL" \
+            --title="$SRC_NAME (main)" \
+            --quiet-success || true

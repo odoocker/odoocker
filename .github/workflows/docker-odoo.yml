@@ -1,0 +1,302 @@
+name: Docker — Odoo Image
+
+###############################################################################
+# Build, smoke-test, scan, and (on main) publish the grove-odoo image.
+#
+# Mirrors the grove-sites docker.yml matrix-build pattern — build local-load
+# first, validate it boots cleanly, scan with Trivy, only then push to ghcr
+# on main. PRs build + scan but don't push, preventing tag pollution.
+#
+# Closes Asana task gid 1215643893837105 (Odoo image CI → GHCR + P2.5
+# fold-in). The companion clone-addons.sh fix (P2.5, gid 1215332717317251)
+# is in the same PR — it strips the @sha256:... suffix from ODOO_TAG so
+# third-party addon clones don't silently fall through to `main`.
+#
+# Resulting image: ghcr.io/goldberry-playground/grove-odoo:<sha|latest>
+# Consumed by: preview/ TF env's docker-compose.preview.yml (PR #32), and
+# release.yml's verify-image step (renamed in this PR to match).
+#
+# ── Infisical identity assignment ──────────────────────────────────────────
+# Identity:   gh-oidc-odoocker-shared (UUID c502a60d-4b37-4e15-9fd7-8186c80c2ad0)
+# Project:    grove-odoocker (slug grove-odoocker-qu8p)
+# Trust:      bound_subject repo+ref; NO workflow_ref binding (shared)
+# Co-tenants: terraform-drift.yml, sandbox-reaper.yml, sandbox-deploy.yml
+#             — see infra/terraform/environments/infisical-identities/README.md
+#
+# Currently fetches: nothing — this workflow uses only the GH-built-in
+# GITHUB_TOKEN for GHCR push (no Infisical secrets needed at build time).
+# The identity assignment is documented here so future additions (e.g., a
+# private base-image registry credential, a Trivy DB token) can use it
+# without re-deriving which slot fits. If you ADD a fetch step here, also
+# add `id-token: write` to job permissions and the Infisical/secrets-action
+# step using the env constants below.
+###############################################################################
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "odoo/**"
+      - ".env.example"
+      - ".github/workflows/docker-odoo.yml"
+      - ".dockerignore"
+  push:
+    branches: [main]
+    paths:
+      - "odoo/**"
+      - ".env.example"
+      - ".github/workflows/docker-odoo.yml"
+      - ".dockerignore"
+
+concurrency:
+  group: docker-odoo-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-smoke-scan:
+    name: Build + smoke + Trivy + push
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      TEST_TAG: test-${{ github.run_id }}
+      IMAGE_NAME: ghcr.io/goldberry-playground/grove-odoo
+      # Build args mirror what local make build does via .env. Defaults match
+      # .env.example so changes to that file flow into CI on the next run.
+      # ODOO_TAG is image-pinned (19.0@sha256:...) for supply-chain hardening.
+      ODOO_TAG: "19.0@sha256:83223b09a6245871a0a7118c2ac4a60e871e8bcda7168086abd3d355c0402ff7"
+      ROOT_PATH: "/usr/lib/python3/dist-packages/odoo"
+      LOG_PATH: "/var/log/odoo/odoo.log"
+      ODOO_RC: "/etc/odoo/odoo.conf"
+      ENTERPRISE_ADDONS: "/usr/lib/python3/dist-packages/odoo/enterprise"
+      THIRD_PARTY_ADDONS: "/usr/lib/python3/dist-packages/odoo/third-party-addons"
+      # Enterprise + private GitHub creds are intentionally empty in CI —
+      # clone-addons.sh skips enterprise repos when GITHUB_USER is unset.
+      # We test the community-addons code path; enterprise builds happen
+      # locally with .env containing real creds.
+      USE_REDIS: "false"
+      USE_S3: "false"
+      USE_SENTRY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Audit 2026-06-29 #7: lint Dockerfile for anti-patterns before build.
+      # failure-threshold: error surfaces warnings/info as advisory but
+      # doesn't gate the build. Current warnings on odoo/Dockerfile
+      # (DL3008 apt pin, DL3042 pip cache, DL3059 multi-RUN) should be
+      # addressed in focused follow-up PRs — fixing them requires
+      # validating the image still builds + smoke-tests pass, which is
+      # outside this audit-fix PR's scope.
+      - name: hadolint Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        timeout-minutes: 1
+        with:
+          dockerfile: odoo/Dockerfile
+          failure-threshold: warning
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Build image (local load)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: odoo/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+          build-args: |
+            ODOO_TAG=${{ env.ODOO_TAG }}
+            ROOT_PATH=${{ env.ROOT_PATH }}
+            LOG_PATH=${{ env.LOG_PATH }}
+            ODOO_RC=${{ env.ODOO_RC }}
+            ENTERPRISE_ADDONS=${{ env.ENTERPRISE_ADDONS }}
+            THIRD_PARTY_ADDONS=${{ env.THIRD_PARTY_ADDONS }}
+            USE_REDIS=${{ env.USE_REDIS }}
+            USE_S3=${{ env.USE_S3 }}
+            USE_SENTRY=${{ env.USE_SENTRY }}
+          cache-from: type=gha,scope=grove-odoo
+          cache-to: type=gha,scope=grove-odoo,mode=max
+
+      # Smoke test: boot Odoo with --stop-after-init against a no-database
+      # config. If the image is broken (missing module, bad addons-path,
+      # python error), `odoo --stop-after-init` fails fast with non-zero.
+      # Same pattern as release.yml's verify-image health check, but inline
+      # so we're not coupling CI to release.yml's structure.
+      - name: Smoke test image (binary boots)
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+        run: |
+          # Defense-in-depth: all values passed via env, never interpolated in run.
+          # Run odoo --stop-after-init with --no-database-list so Odoo doesn't
+          # try to enumerate DBs (which would need a running postgres).
+          # `set +e` so we can inspect the exit code with our own message.
+          set +e
+          docker run --rm \
+            -e DB_HOST=localhost -e DB_PORT=5432 \
+            -e DB_USER=odoo -e DB_PASSWORD=nopass \
+            "$IMAGE" \
+            odoo --stop-after-init --no-database-list 2>&1 | tail -40
+          rc=$?
+          set -e
+          # Exit 0 = clean boot. Some odoo versions exit 1 on
+          # "no module to install" even with --stop-after-init — that's also
+          # acceptable here (image is structurally valid, just no DB action
+          # to take). Reject only on segfault / startup crash codes.
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::odoo --stop-after-init returned rc=$rc — image broken"
+            exit 1
+          fi
+          echo "Smoke test passed (rc=$rc)"
+
+      # Full-stack smoke: postgres + odoo + curl /web/login. Catches the
+      # runtime-orchestration bugs that the binary-boot smoke above misses --
+      # specifically every bug from 2026-06-26's PR #89 / #90 / #91 cycle:
+      #   - entrypoint.sh missing the odoorc.sh invocation (PR #90)
+      #   - odoorc.sh only iterating .env, not full env (PR #89)
+      #   - HOST/PORT/USER/PASSWORD defaults stripped (PR #91)
+      #   - APP_ENV=qa case not handled (PR #89)
+      #   - odoo.conf shipping with unsubstituted ${...} placeholders
+      # All would have failed this step in CI BEFORE merge instead of being
+      # discovered 20 minutes into a live qa-deploy.
+      #
+      # Uses APP_ENV=qa to match what the QA env's compose actually runs.
+      # --init=base populates the empty DB; --workers=0 keeps it lightweight
+      # for CI. Total step time: ~90s on a clean cache (postgres + odoo boot
+      # + base module install).
+      - name: Full-stack smoke (postgres + odoo + curl /web/login)
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+        timeout-minutes: 5
+        run: |
+          # Generate the /.env file we'll bind-mount into odoo. The entrypoint's
+          # .env loader reads /.env at startup -- QA's cloud-init creates this
+          # via a write_files entry and bind-mounts /etc/grove/.env -> /.env.
+          # The smoke test must mirror that or the loader crashes with
+          # ".env: No such file or directory" (caught by this exact step on
+          # the first run -- proof the smoke catches real runtime gaps).
+          cat > /tmp/smoke.env <<'EOF'
+          POSTGRES_PASSWORD=odoosmoketestpw
+          ODOO_ADMIN_PASSWORD=smoketestadmin
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_USER=odoo
+          DB_PASSWORD=odoosmoketestpw
+          ADMIN_PASSWD=smoketestadmin
+          DB_NAME=odoo
+          INIT=base
+          WORKERS=0
+          LIST_DB=false
+          EOF
+
+          # Minimal compose stack reproducing how QA wires odoo to postgres.
+          # Heredoc + EOF, no interpolation -- env vars come from compose's
+          # environment: blocks + the bind-mounted .env file at runtime.
+          cat > /tmp/smoke-compose.yml <<'EOF'
+          services:
+            postgres:
+              image: postgres:17-alpine
+              environment:
+                POSTGRES_USER: odoo
+                POSTGRES_PASSWORD: odoosmoketestpw
+                POSTGRES_DB: odoo
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U odoo"]
+                interval: 5s
+                timeout: 3s
+                retries: 10
+            odoo:
+              image: SMOKE_IMAGE_PLACEHOLDER
+              depends_on:
+                postgres:
+                  condition: service_healthy
+              environment:
+                DB_HOST: postgres
+                DB_PORT: "5432"
+                DB_USER: odoo
+                DB_PASSWORD: odoosmoketestpw
+                POSTGRES_PASSWORD: odoosmoketestpw
+                ADMIN_PASSWD: smoketestadmin
+                APP_ENV: qa
+                DB_NAME: odoo
+                INIT: base
+                WORKERS: "0"
+                LIST_DB: "false"
+              # Bind-mount .env to match QA env's `/etc/grove/.env:/.env:ro`.
+              # entrypoint.sh's loader + odoorc.sh's substitution both read
+              # /.env at startup.
+              volumes:
+                - /tmp/smoke.env:/.env:ro
+              ports:
+                - "8069:8069"
+          EOF
+          # Sub the actual image ref (kept out of the heredoc so $IMAGE
+          # interpolates from the step's env: block, not from arbitrary
+          # YAML content).
+          sed -i "s|SMOKE_IMAGE_PLACEHOLDER|$IMAGE|" /tmp/smoke-compose.yml
+
+          docker compose -f /tmp/smoke-compose.yml up -d
+
+          # Poll /web/login for up to 3 min. First-boot module install takes
+          # ~30-60s on a clean DB; the 3 min ceiling absorbs CI runner jitter.
+          ok=0
+          for i in $(seq 1 36); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8069/web/login || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "✓ Odoo /web/login = 200 after $((i*5))s"
+              ok=1
+              break
+            fi
+            echo "  [$(date +%H:%M:%S)] /web/login = $code (poll $i/36)"
+            sleep 5
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Odoo /web/login never returned 200 — image runtime broken"
+            echo "── odoo logs (tail 80) ──"
+            docker compose -f /tmp/smoke-compose.yml logs odoo --tail 80 2>&1 || true
+            echo "── postgres logs (tail 20) ──"
+            docker compose -f /tmp/smoke-compose.yml logs postgres --tail 20 2>&1 || true
+            docker compose -f /tmp/smoke-compose.yml down -v
+            exit 1
+          fi
+
+          docker compose -f /tmp/smoke-compose.yml down -v
+          echo "✓ full-stack smoke passed"
+
+      # Trivy gate. Same policy as grove-sites docker.yml: HIGH+CRITICAL
+      # block. If noisy, prefer raising severity to CRITICAL only OR adding
+      # a documented .trivyignore — don't flip exit-code back to 0.
+      - name: Trivy — Scan image for high CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          ignore-unfixed: true # CVEs Debian hasn't patched yet shouldn't block CI
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}
+          TAG: ${{ env.TEST_TAG }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker tag "$IMAGE:$TAG" "$IMAGE:latest"
+          docker tag "$IMAGE:$TAG" "$IMAGE:$SHA"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$SHA"

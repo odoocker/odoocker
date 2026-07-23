@@ -2,4 +2,5 @@ debugpy
 websocket-client
 redis
 boto3
-sentry-sdk==1.9.0 # Fixed because Odoo depends on urllib3==1.26.5
+sentry-sdk==1.45.1 # Last 1.x release; pinned because Odoo depends on urllib3==1.26.5 (sentry-sdk 2.x bumps urllib3)
+

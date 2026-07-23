@@ -1,0 +1,211 @@
+{
+  "_comment": "Grove synthetic HTTP/TCP monitors — bootstrap source of truth.",
+  "_lineage": "Consumed by scripts/setup-monitoring.py which POSTs each entry to OpenObserve's /api/{org}/synthetic endpoint. Idempotent — re-runs upsert by 'name'.",
+  "_url_strategy": "Targets use host.docker.internal:<port> for services on the gatheratthegrove-frontends compose project (hub + 3 storefronts), and service-name DNS (e.g. odoo:8069, ghost-goldberry:2368) for services on the shared internal network. In M2+ the host.docker.internal entries become public hostnames; service-name entries stay identical.",
+  "monitors": [
+    {
+      "name": "hub-root",
+      "type": "http",
+      "url": "http://host.docker.internal:3000/",
+      "method": "GET",
+      "expected_status": 200,
+      "expected_keyword": "Gather at the Grove",
+      "interval_seconds": 30,
+      "timeout_seconds": 10,
+      "tags": ["tenant:hub", "tier:frontend", "route:root"]
+    },
+    {
+      "name": "hub-journal",
+      "type": "http",
+      "url": "http://host.docker.internal:3000/journal",
+      "method": "GET",
+      "expected_status": 200,
+      "expected_keyword": "Gather at the Grove",
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:hub", "tier:frontend", "route:journal"]
+    },
+    {
+      "name": "goldberry-root",
+      "type": "http",
+      "url": "http://host.docker.internal:3001/",
+      "method": "GET",
+      "expected_status": 200,
+      "expected_keyword": "Goldberry Grove",
+      "interval_seconds": 30,
+      "timeout_seconds": 10,
+      "tags": ["tenant:goldberry", "tier:frontend", "route:root"]
+    },
+    {
+      "name": "goldberry-shop",
+      "type": "http",
+      "url": "http://host.docker.internal:3001/shop",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:goldberry", "tier:frontend", "route:shop"]
+    },
+    {
+      "name": "goldberry-blog",
+      "type": "http",
+      "url": "http://host.docker.internal:3001/blog",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:goldberry", "tier:frontend", "route:blog"]
+    },
+    {
+      "name": "ggg-root",
+      "type": "http",
+      "url": "http://host.docker.internal:3002/",
+      "method": "GET",
+      "expected_status": 200,
+      "expected_keyword": "George",
+      "interval_seconds": 30,
+      "timeout_seconds": 10,
+      "tags": ["tenant:ggg", "tier:frontend", "route:root"]
+    },
+    {
+      "name": "ggg-shop",
+      "type": "http",
+      "url": "http://host.docker.internal:3002/shop",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:ggg", "tier:frontend", "route:shop"]
+    },
+    {
+      "name": "ggg-blog",
+      "type": "http",
+      "url": "http://host.docker.internal:3002/blog",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:ggg", "tier:frontend", "route:blog"]
+    },
+    {
+      "name": "nursery-root",
+      "type": "http",
+      "url": "http://host.docker.internal:3003/",
+      "method": "GET",
+      "expected_status": 200,
+      "expected_keyword": "At The Grove Nursery",
+      "interval_seconds": 30,
+      "timeout_seconds": 10,
+      "tags": ["tenant:nursery", "tier:frontend", "route:root"]
+    },
+    {
+      "name": "nursery-shop",
+      "type": "http",
+      "url": "http://host.docker.internal:3003/shop",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:nursery", "tier:frontend", "route:shop"]
+    },
+    {
+      "name": "nursery-blog",
+      "type": "http",
+      "url": "http://host.docker.internal:3003/blog",
+      "method": "GET",
+      "expected_status": 200,
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:nursery", "tier:frontend", "route:blog"]
+    },
+    {
+      "name": "odoo-health",
+      "type": "http",
+      "url": "http://odoo:8069/web/login",
+      "method": "GET",
+      "expected_status_in": [200, 303],
+      "interval_seconds": 30,
+      "timeout_seconds": 15,
+      "tags": ["tenant:shared", "tier:backend", "service:odoo"],
+      "_note": "TODO when /grove/api/v1/health ships in grove_headless, swap to that. /web/login is a reasonable stand-in: 303 redirect when DB exists, 200 when serving login form."
+    },
+    {
+      "name": "ghost-goldberry-admin",
+      "type": "http",
+      "url": "http://ghost-goldberry:2368/ghost/api/admin/site/",
+      "method": "GET",
+      "expected_status_in": [200, 401],
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:goldberry", "tier:backend", "service:ghost"],
+      "_note": "401 is fine — proves Ghost is up and the admin auth layer is responding. 200 only if you've passed credentials."
+    },
+    {
+      "name": "ghost-ggg-admin",
+      "type": "http",
+      "url": "http://ghost-ggg:2369/ghost/api/admin/site/",
+      "method": "GET",
+      "expected_status_in": [200, 401],
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:ggg", "tier:backend", "service:ghost"]
+    },
+    {
+      "name": "ghost-nursery-admin",
+      "type": "http",
+      "url": "http://ghost-nursery:2370/ghost/api/admin/site/",
+      "method": "GET",
+      "expected_status_in": [200, 401],
+      "interval_seconds": 60,
+      "timeout_seconds": 10,
+      "tags": ["tenant:nursery", "tier:backend", "service:ghost"]
+    },
+    {
+      "name": "postgres-tcp",
+      "type": "tcp",
+      "host": "postgres",
+      "port": 5432,
+      "interval_seconds": 30,
+      "timeout_seconds": 5,
+      "tags": ["tenant:shared", "tier:backend", "service:postgres"],
+      "_note": "TCP probe only — no auth attempted. Internal network only (postgres has no host port mapping in non-local-dev envs)."
+    },
+    {
+      "_comment": "SSL cert expiry monitors — config-only. Local has no real certs, so these will fail until M2 droplet exists and certs are provisioned. The alert fires at 14 days remaining. Keeping them in the bootstrap so the config survives the eventual prod swap.",
+      "name": "ssl-goldberrygrove-farm",
+      "type": "ssl",
+      "host": "goldberrygrove.farm",
+      "port": 443,
+      "alert_days_before_expiry": 14,
+      "interval_seconds": 3600,
+      "tags": ["tenant:goldberry", "tier:cert", "deferred:until-m2"]
+    },
+    {
+      "name": "ssl-woodworkingeorge-com",
+      "type": "ssl",
+      "host": "woodworkingeorge.com",
+      "port": 443,
+      "alert_days_before_expiry": 14,
+      "interval_seconds": 3600,
+      "tags": ["tenant:ggg", "tier:cert", "deferred:until-m2"]
+    },
+    {
+      "name": "ssl-atthegrovenursery-com",
+      "type": "ssl",
+      "host": "atthegrovenursery.com",
+      "port": 443,
+      "alert_days_before_expiry": 14,
+      "interval_seconds": 3600,
+      "tags": ["tenant:nursery", "tier:cert", "deferred:until-m2"]
+    },
+    {
+      "name": "ssl-gatheringatthegrove-com",
+      "type": "ssl",
+      "host": "gatheringatthegrove.com",
+      "port": 443,
+      "alert_days_before_expiry": 14,
+      "interval_seconds": 3600,
+      "tags": ["tenant:hub", "tier:cert", "deferred:until-m2"]
+    }
+  ]
+}

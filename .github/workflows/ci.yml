@@ -1,0 +1,479 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Audit 2026-06-29 #4: catch workflow injection + YAML schema errors +
+  # embedded shellcheck findings on inline `run:` blocks. Cheap (~5s).
+  # Dial-up 2026-06-29: dropped `-shellcheck=` after PR #127 cleared all
+  # the inline-block findings — embedded shellcheck is safe to re-enable.
+  actionlint:
+    name: actionlint (all workflows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        # actionlint shells out to shellcheck internally; shellcheck reads
+        # SHELLCHECK_OPTS from its env. `-S warning` filters out info/style
+        # findings so only warning+ gates the build — matches the threshold
+        # of the standalone `shellcheck` job below. Dial down to `-S style`
+        # once the codebase is style-clean.
+        env:
+          SHELLCHECK_OPTS: -S warning
+        with:
+          args: -color
+
+  # Audit 2026-06-29 #5: shellcheck the operator scripts we rely on
+  # (qa-teardown-droplet, cleanup-acme-txts, caddy-prefer-prod-cert, etc).
+  # Dial-up 2026-06-29: severity raised error → warning after PR #127
+  # fixed all warning-level findings. Next dial-up after style-level
+  # findings are cleaned up: severity → style.
+  shellcheck:
+    name: shellcheck (scripts/)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca # v2.0.0
+        env:
+          SHELLCHECK_OPTS: -e SC1091
+        with:
+          scandir: ./scripts
+          severity: warning
+
+  no-tracked-env-files:
+    name: Reject tracked .env files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # Single source of truth against the "real .env got committed" leak class.
+      # Operator-owned .env files (.env, .env.local, .env.production, .env.grove,
+      # .env.monitoring) MUST never appear in git history. Example/template files
+      # are allowed (.env.example, .env.*.example, .env.grove.example, etc).
+      - name: Fail if a real .env is tracked
+        run: |
+          tracked=$(git ls-files | grep -E "^(\.env|.*\.env)$" | grep -vE "\.example$" || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::Real .env file(s) are tracked. Move them to .env.*.example or rotate the secrets:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "No tracked .env (non-example) files."
+
+      # Terraform plan artifacts ARE secrets: `plan -out=` binaries embed
+      # every resolved variable value (API tokens, DB passwords). One leaked
+      # to this PUBLIC repo on 2026-07-04 (tfplan-cutover.bin) -- gitleaks
+      # couldn't catch it because it only scans text, and the gitignore
+      # patterns were too narrow for that filename. This gate is the
+      # text-independent backstop: NO plan/state/binary artifacts under
+      # infra/, ever. See vault: Grove Secrets Handling Policy.
+      - name: Fail if a plan/state/binary artifact is tracked under infra/
+        run: |
+          tracked=$(git ls-files -- 'infra/' | grep -E '(tfplan|\.tfstate|\.bin$|\.binary$)' || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::Terraform plan/state or binary artifact(s) tracked under infra/ -- these embed resolved secrets. Remove them and ROTATE EVERY VALUE they contain:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "No tracked plan/state/binary artifacts under infra/."
+
+  lint-python:
+    name: Lint Python (Odoo Modules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check
+        run: |
+          if find odoo/custom-addons/ -name "*.py" 2>/dev/null | grep -q .; then
+            ruff check odoo/custom-addons/ --select E,F,I --line-length 120
+          else
+            echo "No Python files in custom-addons/, skipping"
+          fi
+      - name: Ruff format check
+        run: |
+          if find odoo/custom-addons/ -name "*.py" 2>/dev/null | grep -q .; then
+            ruff format --check odoo/custom-addons/ --line-length 120
+          else
+            echo "No Python files in custom-addons/, skipping"
+          fi
+
+  validate-compose:
+    name: Validate Docker Compose (Grove)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Stub env files
+        run: |
+          # Audit fix SC2015 (2026-06-29): explicit if/then instead of A&&B||C
+          if [ -f .env.example ]; then cp .env.example .env; fi
+          if [ -f .env.grove.example ]; then cp .env.grove.example .env.grove; fi
+
+      # Note: docker-compose.override.local.yml partially overrides ghost-*
+      # services (port mappings only). Their actual image is declared in
+      # override.grove.yml — so the local overlay is INVALID without grove.
+      # Same applies to sandbox and production overlays. Each combination
+      # below must include override.grove.yml.
+
+      - name: Validate base + local + grove
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.local.yml \
+            -f docker-compose.override.grove.yml \
+            --env-file .env --env-file .env.grove \
+            --profile odoo --profile postgres --profile ghost \
+            config --quiet
+
+      - name: Validate base + production + grove
+        run: |
+          if [ -f docker-compose.override.production.yml ]; then
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.override.grove.yml \
+              -f docker-compose.override.production.yml \
+              --env-file .env --env-file .env.grove \
+              --profile odoo --profile postgres --profile ghost \
+              config --quiet
+          fi
+
+      - name: Validate base + sandbox + grove
+        run: |
+          if [ -f docker-compose.override.sandbox.yml ]; then
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.override.grove.yml \
+              -f docker-compose.override.sandbox.yml \
+              --env-file .env --env-file .env.grove \
+              --profile odoo --profile postgres --profile ghost \
+              config --quiet
+          fi
+
+  validate-nginx-syntax:
+    name: Validate Nginx Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Brace balance smell test
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          fail = False
+          for conf in pathlib.Path("nginx").glob("*.conf"):
+              text = conf.read_text()
+              stripped = re.sub(r"#[^\n]*", "", text)
+              opens = stripped.count("{")
+              closes = stripped.count("}")
+              if opens != closes:
+                  print(f"  {conf}: FAIL — unbalanced braces ({opens} opens, {closes} closes)")
+                  fail = True
+                  continue
+              print(f"  {conf}: ok ({opens} blocks)")
+          if fail:
+              sys.exit(1)
+          PY
+
+      # The real syntax check — including upstream resolution — happens in
+      # stack-smoke-test below, where nginx starts with its actual peers up.
+
+  validate-third-party-addons:
+    name: Validate third-party addon branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Always warns, never fails: clone-addons.sh falls back from the
+    # version branch to `main` silently. This job surfaces that fallback
+    # as a GitHub Annotation so reviewers see it on the PR. Failing the
+    # build here would block legitimate work just because an upstream
+    # addon repo hasn't published the new Odoo version branch yet.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Resolve ODOO_TAG branch
+        id: tag
+        run: |
+          raw=$(grep '^ODOO_TAG=' .env.example | head -1 | cut -d= -f2 | tr -d '"' | tr -d "'" | xargs)
+          # ODOO_TAG is image-pinned like "19.0@sha256:abc..." — strip
+          # the digest to get the actual git branch name ("19.0").
+          branch="${raw%%@*}"
+          if [ -z "$branch" ]; then
+            echo "::error::Could not resolve ODOO_TAG from .env.example"
+            exit 1
+          fi
+          echo "raw=$raw" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Checking third-party addons against branch '$branch' (from ODOO_TAG=$raw)"
+
+      - name: Check each repo via git ls-remote
+        env:
+          ODOO_BRANCH: ${{ steps.tag.outputs.branch }}
+        run: |
+          set -u
+          # Validate the branch name resolved upstream is safe to pass as
+          # a git refname (digits, dots, dashes, underscores only). Defense
+          # against a hypothetical .env.example mutation that smuggles
+          # metacharacters into the value.
+          if [[ ! "$ODOO_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Refusing to ls-remote: ODOO_BRANCH '$ODOO_BRANCH' is not a safe ref name"
+            exit 1
+          fi
+
+          total=0; ok=0; fallback=0; missing=0
+          while IFS= read -r line; do
+            # Skip comments and blanks
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # First two whitespace-separated fields: <type> <url>
+            read -r repo_type repo_url _ <<< "$line"
+            # Skip enterprise — ls-remote without creds returns nothing
+            # so we'd false-flag every build.
+            [[ "$repo_type" == "enterprise" ]] && continue
+            [[ -z "$repo_url" ]] && continue
+
+            # URL allow-list: must be an http(s) URL pointing at a known
+            # forge. Refuses anything starting with `-` (which git would
+            # interpret as a CLI flag — classic `--upload-pack=` RCE) or
+            # using a non-web scheme (file://, ssh://, ext::). This is
+            # defense-in-depth: the `git ls-remote -- "$repo_url"` form
+            # below ALSO blocks flag-injection, but allow-listing the
+            # forge bounds the blast radius of any future regression.
+            if [[ ! "$repo_url" =~ ^https://(github\.com|gitlab\.com|bitbucket\.org)/ ]]; then
+              echo "::warning file=odoo/third-party-addons.txt::Refusing to validate '$repo_url' — only https URLs to github/gitlab/bitbucket are checked. Add the forge to the allow-list in ci.yml if needed."
+              continue
+            fi
+            total=$((total + 1))
+
+            # `git ls-remote -- <url> <ref>` — the `--` end-of-options
+            # marker is critical: without it, a malicious URL starting
+            # with `-` would be parsed as a flag by git itself.
+            tag_present=$(git ls-remote --heads -- "$repo_url" "$ODOO_BRANCH" 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$tag_present" -gt 0 ]; then
+              echo "  ok    $repo_url has branch $ODOO_BRANCH"
+              ok=$((ok + 1))
+              continue
+            fi
+
+            main_present=$(git ls-remote --heads -- "$repo_url" main 2>/dev/null | wc -l | tr -d ' ')
+            master_present=$(git ls-remote --heads -- "$repo_url" master 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$main_present" -gt 0 ] || [ "$master_present" -gt 0 ]; then
+              fallback_branch="main"
+              [ "$main_present" -eq 0 ] && fallback_branch="master"
+              echo "::warning file=odoo/third-party-addons.txt::$repo_url is missing branch $ODOO_BRANCH. clone-addons.sh will silently fall back to $fallback_branch — modules may be incompatible with this Odoo version."
+              fallback=$((fallback + 1))
+            else
+              echo "::warning file=odoo/third-party-addons.txt::$repo_url has NEITHER $ODOO_BRANCH NOR main/master. clone-addons.sh will skip this repo entirely; any modules expected from it WILL be missing from the built image."
+              missing=$((missing + 1))
+            fi
+          done < odoo/third-party-addons.txt
+
+          echo ""
+          echo "Summary: $total public repos checked"
+          echo "  $ok have the expected branch ($ODOO_BRANCH)"
+          echo "  $fallback will fall back to main/master"
+          echo "  $missing have no compatible branch"
+          # Always exit 0 — warnings only, never fail the build.
+
+  stack-smoke-test:
+    name: Backend stack smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Audit 2026-06-29 #6: gate the 20-min smoke behind cheap fail-fast jobs.
+    # Previously ran in parallel with lint — a Python parse error wasted the
+    # full 20 minutes before lint caught it.
+    needs: [actionlint, shellcheck, no-tracked-env-files, lint-python, validate-compose]
+    # The failure-notify step below opens a qa-broken audit issue; gh issue
+    # create needs issues:write. Job-level permissions REPLACE the workflow
+    # default (contents: read), so re-declare contents:read for checkout.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Stub env files
+        run: |
+          cp .env.example .env
+          sed -i 's/^APP_ENV=.*/APP_ENV=local/' .env || true
+          [ -f .env.grove.example ] && cp .env.grove.example .env.grove || true
+          # `.env.example` deliberately ships empty values for fields that
+          # MUST be set in any real deployment (DB_PASSWORD, ADMIN_PASSWD,
+          # MinIO root creds). Postgres refuses to boot with an empty
+          # password, which is the intended fail-closed behavior — for CI
+          # we substitute throwaway test values so the smoke test can run.
+          # These values never leave the GitHub runner.
+          cat >> .env <<'EOF'
+
+          DB_PASSWORD=ci-postgres-test-pw
+          POSTGRES_PASSWORD=ci-postgres-test-pw
+          ADMIN_PASSWD=ci-admin-test-pw
+          AWS_ACCESS_KEY_ID=ci-test-access-key
+          AWS_SECRET_ACCESS_KEY=ci-test-secret-key-at-least-eight-chars
+          EOF
+
+      # Same overlay rule as validate-compose: local needs grove for ghost
+      # services to have an image. We skip --profile ghost to keep the test
+      # fast — only Odoo+Postgres need to come up for the smoke check.
+      - name: Start Postgres + Odoo
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.local.yml \
+            -f docker-compose.override.grove.yml \
+            --env-file .env --env-file .env.grove \
+            --profile odoo --profile postgres \
+            up -d
+
+      - name: Wait for Odoo to respond (up to 10 minutes)
+        run: |
+          # GitHub runners are slower than dev machines — Odoo 19 cold-boot
+          # can take 4-6 minutes here. 120 polls × 5s = 10 min budget.
+          for i in $(seq 1 120); do
+            if curl -fsS -o /dev/null http://localhost:8069/web/database/manager 2>/dev/null \
+               || curl -fsS -o /dev/null http://localhost:8069/web/login 2>/dev/null; then
+              echo "Odoo responding after ${i} polls (~$((i * 5))s)"
+              exit 0
+            fi
+            # Every 30s, dump the last few log lines so a failure can be
+            # diagnosed from the workflow output without re-running.
+            if [ $((i % 6)) -eq 0 ]; then
+              echo "::group::Odoo logs (poll ${i})"
+              docker compose -f docker-compose.yml \
+                -f docker-compose.override.local.yml \
+                -f docker-compose.override.grove.yml \
+                logs --tail=20 odoo 2>&1 || true
+              echo "::endgroup::"
+            fi
+            sleep 5
+          done
+          echo "::error::Odoo never came online after 10 minutes"
+          docker compose -f docker-compose.yml \
+            -f docker-compose.override.local.yml \
+            -f docker-compose.override.grove.yml \
+            logs odoo postgres
+          exit 1
+
+      # On a push-to-main smoke failure (a regression that already merged),
+      # notify the Paperclip Dev Agent to investigate + open a draft PR, and
+      # open a qa-broken audit issue. PR-iteration failures are intentionally
+      # NOT routed (the author is already on it). All inputs are trusted GitHub
+      # context (sha/repo/run_id) passed via env — no untrusted-input injection.
+      - name: On smoke failure (main only), fire Paperclip Dev Agent + open GH issue
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          WEBHOOK_URL: ${{ secrets.PAPERCLIP_QA_TRIAGE_WEBHOOK }}
+          HMAC_SECRET: ${{ secrets.PAPERCLIP_QA_TRIAGE_SECRET }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # No-op until the Paperclip webhook is configured (secrets unset) —
+          # keeps a pre-activation main regression from failing on a missing secret.
+          if [ -z "$WEBHOOK_URL" ] || [ -z "$HMAC_SECRET" ]; then
+            echo "Paperclip QA webhook not configured (secrets unset) — skipping agent trigger."
+          else
+            PAYLOAD=$(jq -nc \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --arg commit "$GITHUB_SHA" \
+              --arg run_url "$RUN_URL" \
+              --arg summary "Backend stack smoke test failed on main — Odoo did not come online." \
+              '{kind:"qa_smoke_failure", repo:$repo, commit:$commit, run_url:$run_url, summary:$summary}')
+            # HMAC over the EXACT bytes sent (jq -c keeps it compact + stable).
+            SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$HMAC_SECRET" -hex | sed 's/^.*= //')
+            curl -fsS -X POST "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -H "X-Hub-Signature-256: sha256=$SIG" \
+              -H "CF-Access-Client-Id: $CF_ID" \
+              -H "CF-Access-Client-Secret: $CF_SECRET" \
+              --data "$PAYLOAD"
+          fi
+          # Audit trail (idempotent label create so a missing label can't fail the job).
+          gh label create qa-broken --color B60205 --description "QA smoke test broken on main" 2>/dev/null || true
+          gh issue create --label qa-broken \
+            --title "QA smoke failed on main: run #${GITHUB_RUN_ID}" \
+            --body "Backend stack smoke test failed on \`main\` (Odoo did not come online). Run: ${RUN_URL} · Dev Agent notified via Paperclip (if configured)." \
+            || echo "::warning::could not open qa-broken audit issue"
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.local.yml \
+            -f docker-compose.override.grove.yml \
+            --env-file .env --env-file .env.grove \
+            --profile odoo --profile postgres \
+            down -v
+
+  # ── Plan item #5: catch Terraform fmt + validate regressions at PR time ──
+  # Without this, fmt drift and broken references (e.g. an output pointing at
+  # a non-existent resource) only surface when qa-deploy actually runs TF
+  # apply on the droplet, by which time the operator has already paid the
+  # CI minutes for the rest of the deploy. Cheap (no secrets needed because
+  # we use -backend=false to skip backend init), high-signal.
+  terraform-checks:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "~1.10" # GOL-40: use_lockfile requires >= 1.10
+
+      - name: terraform fmt -check (recursive)
+        run: terraform fmt -check -recursive -diff infra/terraform/
+
+      # Validate per env + module. Each needs its own `terraform init
+      # -backend=false` so the providers (digitalocean, cloudflare, etc.)
+      # are downloaded but the S3 backend (which needs Spaces creds) is
+      # skipped. set -e + per-dir grouping = one specific error instead of
+      # a 7-env wall of red.
+      - name: terraform validate (every env + module)
+        run: |
+          set -e
+          for d in infra/terraform/environments/*/ infra/terraform/modules/*/; do
+            echo "::group::$d"
+            (
+              cd "$d"
+              terraform init -backend=false -input=false >/dev/null
+              terraform validate
+            )
+            echo "::endgroup::"
+          done

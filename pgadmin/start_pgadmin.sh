@@ -84,3 +84,15 @@ if [[ $PGADMIN_SERVERS_JSON ]]; then
 
     echo "JSON configuration saved to $DIR_NAME/servers.json"
 fi
+
+# Chain to the upstream pgadmin4 entrypoint so the web server actually
+# starts. We're invoked as the container ENTRYPOINT (set in our Dockerfile)
+# so the original /entrypoint.sh from dpage/pgadmin4 isn't run for us —
+# we have to explicitly hand off. If the path ever changes in a future
+# upstream image, this exec will fail loudly and CI will catch it.
+if [ -x /entrypoint.sh ]; then
+    exec /entrypoint.sh "$@"
+else
+    echo "ERROR: /entrypoint.sh not found — upstream pgadmin4 image layout changed?" >&2
+    exit 1
+fi

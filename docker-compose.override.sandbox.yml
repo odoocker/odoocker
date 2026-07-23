@@ -1,0 +1,51 @@
+###############################################################################
+# Grove Sandbox / QA Override
+# Layered on top of the base + grove override for ephemeral QA environments.
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.grove.yml \
+#     -f docker-compose.override.sandbox.yml \
+#     up
+###############################################################################
+
+services:
+  odoo:
+    environment:
+      - APP_ENV=staging
+      - DB_NAME=grove_sandbox
+      - DOMAIN=erp-sandbox.goldberrygrove.farm
+    restart: "no"
+
+  postgres:
+    restart: "no"
+
+  ghost-goldberry:
+    environment:
+      url: ${SANDBOX_GHOST_GOLDBERRY_URL}
+      NODE_ENV: development
+    restart: "no"
+
+  ghost-ggg:
+    environment:
+      url: ${SANDBOX_GHOST_GGG_URL}
+      NODE_ENV: development
+    restart: "no"
+
+  ghost-nursery:
+    environment:
+      url: ${SANDBOX_GHOST_NURSERY_URL}
+      NODE_ENV: development
+    restart: "no"
+
+  nginx:
+    restart: "no"
+
+  nginx-proxy:
+    restart: "no"
+
+  redis:
+    restart: "no"
+
+  s3:
+    restart: "no"

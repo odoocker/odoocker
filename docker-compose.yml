@@ -18,11 +18,31 @@ services:
         - USE_S3
         - USE_SENTRY
     tty: true
+    # Wait for Postgres to actually accept connections before Odoo's
+    # entrypoint runs. Odoo's in-container `wait-for-psql.py --timeout=30`
+    # was the ONLY ordering guard; on a cold boot the postgres first-run
+    # initdb + /docker-entrypoint-initdb.d (create template DB, unaccent,
+    # users) does not accept TCP connections and can exceed 30s. When it
+    # does, wait-for-psql exits non-zero -> `set -e` aborts the entrypoint
+    # -> with `restart: 'no'` (CI smoke, sandbox) the container stays dead
+    # and never comes online. `condition: service_healthy` makes compose
+    # hold Odoo until the postgres healthcheck below passes, so the 30s
+    # wait starts against an already-ready DB. (GOL-22)
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - odoo-data:${DATA_DIR}
       - ./odoo/extra-addons:${EXTRA_ADDONS}
       - ./odoo/custom-addons:${CUSTOM_ADDONS}
       - ./odoo/entrypoint.sh:/entrypoint.sh
+      # Bind-mount .env at runtime instead of baking it into the image.
+      # The Dockerfile no longer `COPY`s .env, so secrets don't live in
+      # any image layer. Read-only mount = container can't tamper with
+      # the operator's source-of-truth.
+      - ./.env:/.env:ro
+      # Shared volume for git-sync live module updates (managed by custom-modules-sync service)
+      - custom-modules-data:/workspace
     environment:
       - HOST=${DB_HOST}
       - PORT=${DB_PORT}
@@ -55,26 +75,60 @@ services:
     profiles: [$ODOO_PROFILES]
 
   postgres:
-    build: 
+    build:
       context: ./
       dockerfile: ./postgres/Dockerfile
       args:
         - POSTGRES_TAG
     tty: true
+    # Increase Docker's /dev/shm to match shared_buffers so PostgreSQL uses
+    # POSIX shared memory instead of slower mmap fallback.
+    # Rule of thumb: shm_size >= POSTGRES_SHARED_BUFFERS + 256MB headroom.
+    shm_size: '1536mb'
+    command: >
+      postgres
+      -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}
+      -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-3GB}
+      -c work_mem=${POSTGRES_WORK_MEM:-16MB}
+      -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}
+      -c wal_buffers=${POSTGRES_WAL_BUFFERS:-16MB}
+      -c max_wal_size=${POSTGRES_MAX_WAL_SIZE:-4GB}
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=${POSTGRES_RANDOM_PAGE_COST:-1.1}
+      -c effective_io_concurrency=${POSTGRES_EFFECTIVE_IO_CONCURRENCY:-200}
+      -c log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_STATEMENT:-1000}
+      -c max_connections=${DB_MAXCONN:-100}
+      -c default_statistics_target=100
     volumes:
       - pg-data:${PGDATA}
       - ./postgres/entrypoint.sh:/docker-entrypoint-initdb.d/entrypoint.sh
+      # Bind-mount .env at runtime instead of baking it into the image.
+      - ./.env:/.env:ro
     environment:
       - POSTGRES_DB
       - POSTGRES_USER
       - POSTGRES_PASSWORD
       - PGDATA
       - DB_USER
+      - DB_PASSWORD
       - DB_TEMPLATE
       - UNACCENT_TEMPLATE
       - PGADMING_DB_NAME
       - PGADMING_DB_USER
       - PGADMIN_DB_PASSWORD
+    # `-h 127.0.0.1` forces a TCP probe. During the postgres first-run
+    # init phase the temporary server listens on the unix socket ONLY
+    # (listen_addresses=''), so a TCP probe correctly reports "not ready"
+    # until the real server is up — avoiding a false-healthy that would
+    # let Odoo start mid-init. pg_isready needs no password (it only
+    # checks that the server is accepting connections). POSTGRES_USER is
+    # provided by this service's environment block above.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
     networks:
       - internal
     profiles: [$POSTGRES_PROFILES]
@@ -89,10 +143,21 @@ services:
     volumes:
       - ./nginx/nginx.conf:${NGINX_CONF}
       - ./nginx/default.conf:${NGINX_DEFAULT_CONF}
+      # Shared snippet library — CORS allowlist (prod origins only) and
+      # the security-header triplet. Both this inner nginx and the outer
+      # nginx-proxy mount the same path so map/header definitions live
+      # in ONE place. Dev-only origins are layered in via
+      # docker-compose.override.local.yml; the prod-shipped directory
+      # contains only files safe to load in production.
+      - ./nginx/snippets:/etc/nginx/snippets:ro
     environment:
+      # VIRTUAL_HOST contains all domains (backend + client sites). nginx-proxy reads this
+      # and routes every listed domain to this container. Inner nginx uses server_name _
+      # (catch-all) and proxies everything to Odoo, which selects the correct website by $host.
       - VIRTUAL_HOST
       - LETSENCRYPT_HOST
       - LETSENCRYPT_EMAIL
+      - CLIENT_DOMAINS
       - CORS_ALLOWED_DOMAIN
     networks:
       - internal
@@ -106,6 +171,10 @@ services:
     volumes:
       - ./nginx-proxy/nginx.conf:${NGINX_CONF}
       - ./nginx-proxy/cors.conf:${NGINX_PROXY_CORS_CONF}
+      # Same shared snippet library as the inner nginx — single source
+      # of truth for the CORS allowlist and security-header triplet.
+      # See ./nginx/snippets/cors-allowlist.conf for the rationale.
+      - ./nginx/snippets:/etc/nginx/snippets:ro
       - html:${NGINX_HTML}
       - vhost:${NGINX_VHOST}
       - certs:${NGINX_CERTS}:ro
@@ -138,8 +207,10 @@ services:
   redis:
     image: eqalpha/keydb:${KEYDB_TAG}
     platform: linux/amd64
-    ports:
-      - ${KEYDB_PORT}:${KEYDB_PORT}
+    # No `ports:` here — KeyDB is reached by Odoo over the internal Docker
+    # network. The base used to publish ${KEYDB_PORT} on 0.0.0.0, which
+    # leaked through to sandbox/production because those overlays never
+    # set ports: [] to undo it. Loopback dev access is in override.local.yml.
     volumes:
       - redis-data:${KEYDB_DATA}
     networks:
@@ -157,9 +228,11 @@ services:
     command: server ${MINIO_DATA} --console-address ":${MINIO_CONSOLE_PORT}"
     volumes:
       - s3-data:${MINIO_DATA}
-    ports:
-      - ${MINIO_API_PORT}:${MINIO_API_PORT}
-      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    # No `ports:` here — MinIO is reached by Odoo over the internal Docker
+    # network, and the console is fronted by nginx-proxy via VIRTUAL_HOST.
+    # The base used to publish API + console ports on 0.0.0.0, which
+    # leaked through to sandbox/production with default credentials
+    # `myaccesskey`/`mysecretkey`. Loopback dev access is in override.local.yml.
     networks:
       - internal
     profiles: [$MINIO_PROFILES]
@@ -176,6 +249,9 @@ services:
       - 80
     volumes:
       - pgadmin-data:${PGADMIN_DATA}
+      # Bind-mount .env at runtime — start_pgadmin.sh sources this at
+      # container start. Dockerfile no longer bakes the file.
+      - ./.env:/.env:ro
     environment:
       - PGADMIN_DEFAULT_EMAIL
       - PGADMIN_DEFAULT_PASSWORD
@@ -206,6 +282,36 @@ services:
       - internal
     profiles: [$PGADMIN_PROFILES]
 
+  # Live custom-module sync — mounts the same volume as the odoo service at /workspace.
+  # git-sync clones CUSTOM_MODULES_REPO and creates /workspace/current -> latest checkout.
+  # Odoo reads modules from /workspace/current (included in ADDONS_PATH via SYNC_ADDONS).
+  # No image rebuild needed: push to your modules repo and changes appear within SYNC_PERIOD.
+  # Webhook endpoint: POST https://your-domain/modules-sync/ (proxied via nginx to port 9000)
+  custom-modules-sync:
+    image: registry.k8s.io/git-sync/git-sync:${GIT_SYNC_TAG:-v4.2.3}
+    # Run as root so it can write to the shared volume regardless of mount permissions
+    user: "0:0"
+    volumes:
+      - custom-modules-data:/workspace
+    environment:
+      - GITSYNC_REPO=${CUSTOM_MODULES_REPO}
+      # GITSYNC_REF supersedes GITSYNC_BRANCH (deprecated in git-sync v4) and
+      # accepts a branch name, tag, or full commit SHA. Production should pin
+      # to a SHA via docker-compose.override.production.yml. CUSTOM_MODULES_BRANCH
+      # kept as fallback for compat with older .env files.
+      - GITSYNC_REF=${CUSTOM_MODULES_REF:-${CUSTOM_MODULES_BRANCH:-main}}
+      - GITSYNC_ROOT=/workspace
+      - GITSYNC_LINK=current
+      - GITSYNC_DEPTH=1
+      - GITSYNC_PERIOD=${CUSTOM_MODULES_SYNC_PERIOD:-30s}
+      # Exposes /metrics and /healthz; also accepts POST /sync for webhook-triggered pulls
+      - GITSYNC_HTTP_BIND=:9000
+      - GITSYNC_USERNAME=${GITHUB_USER}
+      - GITSYNC_PASSWORD=${GITHUB_ACCESS_TOKEN}
+    networks:
+      - internal
+    profiles: [$GIT_SYNC_PROFILES]
+
 volumes:
   odoo-data:
   pg-data:
@@ -216,6 +322,8 @@ volumes:
   vhost:
   certs:
   acme:
+  # Shared between custom-modules-sync (writer) and odoo (reader)
+  custom-modules-data:
 
 networks:
   internal:

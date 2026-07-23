@@ -1,0 +1,212 @@
+###############################################################################
+# Grove Multi-Tenant Ecosystem — Ghost CMS + Headless Frontends
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.override.grove.yml up
+###############################################################################
+
+# Ghost image is pinned by content-addressable SHA256 digest below. There
+# is no GHOST_TAG env var because all three tenants share the same image
+# and tenant differs only by `url` + port. To upgrade Ghost, re-run
+# `docker buildx imagetools inspect ghost:5-alpine` and update all three
+# `image:` lines together. See .env.example "Containers' Tags" for the
+# supply-chain-hardening rationale.
+services:
+  ghost-goldberry:
+    image: ghost:5-alpine@sha256:a0506f3f05f5bdc6c950c5113cdcdb1e1f96fbf15f6dc0a39fc093c25348bdb5
+    restart: unless-stopped
+    environment:
+      url: ${GHOST_GOLDBERRY_URL}
+      database__client: sqlite3
+      database__connection__filename: /var/lib/ghost/content/data/ghost.db
+      NODE_ENV: production
+    volumes:
+      - ghost-goldberry-data:/var/lib/ghost/content
+    expose:
+      - "2368"
+    networks:
+      - internal
+
+  ghost-ggg:
+    image: ghost:5-alpine@sha256:a0506f3f05f5bdc6c950c5113cdcdb1e1f96fbf15f6dc0a39fc093c25348bdb5
+    restart: unless-stopped
+    environment:
+      url: ${GHOST_GGG_URL}
+      database__client: sqlite3
+      database__connection__filename: /var/lib/ghost/content/data/ghost.db
+      NODE_ENV: production
+      server__port: "2369"
+    volumes:
+      - ghost-ggg-data:/var/lib/ghost/content
+    expose:
+      - "2369"
+    networks:
+      - internal
+
+  ghost-nursery:
+    image: ghost:5-alpine@sha256:a0506f3f05f5bdc6c950c5113cdcdb1e1f96fbf15f6dc0a39fc093c25348bdb5
+    restart: unless-stopped
+    environment:
+      url: ${GHOST_NURSERY_URL}
+      database__client: sqlite3
+      database__connection__filename: /var/lib/ghost/content/data/ghost.db
+      NODE_ENV: production
+      server__port: "2370"
+    volumes:
+      - ghost-nursery-data:/var/lib/ghost/content
+    expose:
+      - "2370"
+    networks:
+      - internal
+
+  # ── Grove frontends (Next.js storefronts + hub) ────────────────────────────
+  # Profile-gated: set FRONTENDS_PROFILES=frontends in .env to bring them up.
+  # Images come from ghcr.io/goldberry-playground/grove-{hub,goldberry,ggg,nursery},
+  # built and published by grove-sites CI on every push to main. Pull with
+  # `docker compose pull` before `up`; pin per-service tags via the
+  # *_IMAGE_TAG env vars in .env.grove for reproducible prod releases.
+  #
+  # nginx-proxy routing is wired but OPT-IN per environment. Each frontend
+  # carries VIRTUAL_HOST / VIRTUAL_PORT / LETSENCRYPT_HOST, all defaulting to
+  # EMPTY here. nginx-proxy skips any container whose VIRTUAL_HOST is unset, so
+  # this overlay alone changes nothing for the existing Odoo + Ghost vhosts —
+  # no clash with the Odoo apex-domain claim until a host is explicitly set.
+  #   - Local (override.local.yml): defaults each to `<name>.localhost`, so
+  #     `--profile proxy --profile frontends up` serves all 4 behind nginx-proxy
+  #     on :80 with zero extra config (direct host ports 3000-3003 are still
+  #     published for fast dev iteration).
+  #   - Preview/prod: the per-PR droplet + apex->subdomain work (GOL-6/GOL-7)
+  #     supplies the real *_VIRTUAL_HOST / *_LETSENCRYPT_HOST values via .env.
+  # VIRTUAL_PORT is fixed to each app's container port (hub 3000, storefronts
+  # 3001) so nginx-proxy never has to guess.
+  #
+  # Backend URLs default to Docker service-name DNS on the `internal` network
+  # (e.g. http://odoo:8069). For dev iteration against a backend running in a
+  # different compose project, override ODOO_URL / GHOST_URL_* to
+  # http://host.docker.internal:<port> in your .env.
+
+  hub:
+    image: ghcr.io/goldberry-playground/grove-hub:${HUB_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      GROVE_ODOO_URL: ${GROVE_ODOO_URL:-http://odoo:8069}
+      HUB_GHOST_URL: ${HUB_GHOST_URL:-http://ghost-goldberry:2368}
+      HUB_GHOST_CONTENT_API_KEY: ${HUB_GHOST_CONTENT_API_KEY:-}
+      GROVE_REVALIDATE_SECRET: ${GROVE_REVALIDATE_SECRET:-}
+      # nginx-proxy routing — empty by default (no vhost). Set per-env in .env.
+      VIRTUAL_HOST: ${HUB_VIRTUAL_HOST:-}
+      VIRTUAL_PORT: "3000"
+      LETSENCRYPT_HOST: ${HUB_LETSENCRYPT_HOST:-}
+    expose:
+      - "3000"
+    networks:
+      - internal
+    profiles: [$FRONTENDS_PROFILES]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  goldberry:
+    image: ghcr.io/goldberry-playground/grove-goldberry:${GOLDBERRY_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: goldberry
+      NEXT_PUBLIC_TENANT_ID: goldberry
+      ODOO_URL: ${ODOO_URL:-http://odoo:8069}
+      ODOO_API_KEY: ${ODOO_API_KEY:-}
+      GHOST_URL: ${GHOST_URL_GOLDBERRY:-http://ghost-goldberry:2368}
+      GHOST_CONTENT_KEY: ${GHOST_CONTENT_KEY_GOLDBERRY:-}
+      # nginx-proxy routing — empty by default (no vhost). Set per-env in .env.
+      VIRTUAL_HOST: ${GOLDBERRY_VIRTUAL_HOST:-}
+      VIRTUAL_PORT: "3001"
+      LETSENCRYPT_HOST: ${GOLDBERRY_LETSENCRYPT_HOST:-}
+    expose:
+      - "3001"
+    networks:
+      - internal
+    profiles: [$FRONTENDS_PROFILES]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  ggg:
+    image: ghcr.io/goldberry-playground/grove-ggg:${GGG_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: ggg
+      NEXT_PUBLIC_TENANT_ID: ggg
+      ODOO_URL: ${ODOO_URL:-http://odoo:8069}
+      ODOO_API_KEY: ${ODOO_API_KEY:-}
+      GHOST_URL: ${GHOST_URL_GGG:-http://ghost-ggg:2369}
+      GHOST_CONTENT_KEY: ${GHOST_CONTENT_KEY_GGG:-}
+      # nginx-proxy routing — empty by default (no vhost). Set per-env in .env.
+      VIRTUAL_HOST: ${GGG_VIRTUAL_HOST:-}
+      VIRTUAL_PORT: "3001"
+      LETSENCRYPT_HOST: ${GGG_LETSENCRYPT_HOST:-}
+    expose:
+      - "3001"
+    networks:
+      - internal
+    profiles: [$FRONTENDS_PROFILES]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  nursery:
+    image: ghcr.io/goldberry-playground/grove-nursery:${NURSERY_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: nursery
+      NEXT_PUBLIC_TENANT_ID: nursery
+      ODOO_URL: ${ODOO_URL:-http://odoo:8069}
+      ODOO_API_KEY: ${ODOO_API_KEY:-}
+      GHOST_URL: ${GHOST_URL_NURSERY:-http://ghost-nursery:2370}
+      GHOST_CONTENT_KEY: ${GHOST_CONTENT_KEY_NURSERY:-}
+      # nginx-proxy routing — empty by default (no vhost). Set per-env in .env.
+      VIRTUAL_HOST: ${NURSERY_VIRTUAL_HOST:-}
+      VIRTUAL_PORT: "3001"
+      LETSENCRYPT_HOST: ${NURSERY_LETSENCRYPT_HOST:-}
+    expose:
+      - "3001"
+    networks:
+      - internal
+    profiles: [$FRONTENDS_PROFILES]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  ghost-goldberry-data:
+  ghost-ggg-data:
+  ghost-nursery-data:

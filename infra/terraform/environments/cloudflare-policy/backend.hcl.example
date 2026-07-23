@@ -1,0 +1,12 @@
+# Copy to backend.hcl (git-ignored) before running `terraform init`.
+# Same backend bucket as every other Grove TF env; only `key` differs.
+
+endpoint                    = "https://nyc3.digitaloceanspaces.com"
+bucket                      = "grove-tf-state"
+key                         = "cloudflare-policy/terraform.tfstate"
+region                      = "us-east-1"
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_requesting_account_id  = true
+force_path_style            = true

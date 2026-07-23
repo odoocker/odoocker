@@ -1,0 +1,142 @@
+###############################################################################
+# Grove Preview — Compose stack (single-host, ephemeral)
+#
+# Started from cloud-init after snapshot restore completes.
+# Template variables substituted by Terraform's templatefile() before this
+# file lands on the droplet:
+#   {{ODOO_IMAGE_TAG}} {{HUB_TAG}} {{GOLDBERRY_TAG}} {{GGG_TAG}} {{NURSERY_TAG}}
+#   {{PREVIEW_HOST}} {{PREVIEW_ZONE}}
+# Env-file-sourced at runtime (cloud-init writes /etc/grove/.env):
+#   POSTGRES_PASSWORD, DO_API_TOKEN,
+#   GHOST_KEY_GOLDBERRY, GHOST_KEY_GGG, GHOST_KEY_NURSERY
+#
+# This is a SIMPLIFIED stack scoped to preview needs — distinct from the
+# full odoocker compose (which also runs Ghost containers, nginx-proxy,
+# acme-companion, KeyDB, MinIO, pgAdmin). Previews use prod Ghost via
+# Content API (read-only, browser-safe), so no Ghost containers here.
+# Consolidating to odoocker compose with `--profile frontends` is a
+# follow-up after the Hub deadline.
+###############################################################################
+
+services:
+  caddy:
+    # Same pre-baked image QA uses (PR #87 in odoocker history). The earlier
+    # `slothcored/caddy:digitalocean` reference was a Docker Hub 404 -- never
+    # existed. QA caught this on 2026-06-26 during the cert resilience work
+    # (PR #82 -> PR #84 -> PR #87) and fixed it; preview was never updated
+    # because the preview-up workflow doesn't exist yet so nothing was
+    # exercising preview's compose. This brings preview to parity with QA's
+    # working Caddy image (xcaddy with caddy-dns/digitalocean baked in).
+    image: ghcr.io/goldberry-playground/grove-caddy:${CADDY_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DO_API_TOKEN: ${DO_API_TOKEN}
+      # Default to LE prod. Preview gets ONE cert per PR (different identifier
+      # set each time, due to the 5-char-suffix host label), so rate-limit
+      # exposure is bounded -- staging fallback isn't strictly needed but the
+      # Caddyfile's multi-issuer block accepts the override anyway.
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+    volumes:
+      - /etc/grove/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - hub
+      - goldberry
+      - ggg
+      - nursery
+      - odoo
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grove_preview
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo -d grove_preview"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  odoo:
+    image: ghcr.io/goldberry-playground/grove-odoo:{{ODOO_IMAGE_TAG}}
+    restart: unless-stopped
+    environment:
+      APP_ENV: preview
+      DB_NAME: grove_preview
+      DB_HOST: postgres
+      DB_USER: odoo
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DOMAIN: odoo.{{PREVIEW_HOST}}.{{PREVIEW_ZONE}}
+    volumes:
+      - odoo_filestore:/var/lib/odoo/filestore
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  hub:
+    image: ghcr.io/goldberry-playground/grove-hub:{{HUB_TAG}}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      GROVE_ODOO_URL: http://odoo:8069
+      HUB_GHOST_URL: https://blog.goldberrygrove.farm
+      HUB_GHOST_CONTENT_API_KEY: ${GHOST_KEY_GOLDBERRY}
+    depends_on:
+      odoo:
+        condition: service_started
+
+  goldberry:
+    image: ghcr.io/goldberry-playground/grove-goldberry:{{GOLDBERRY_TAG}}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: goldberry
+      NEXT_PUBLIC_TENANT_ID: goldberry
+      ODOO_URL: http://odoo:8069
+      GHOST_URL: https://blog.goldberrygrove.farm
+      GHOST_CONTENT_KEY: ${GHOST_KEY_GOLDBERRY}
+    depends_on:
+      odoo:
+        condition: service_started
+
+  ggg:
+    image: ghcr.io/goldberry-playground/grove-ggg:{{GGG_TAG}}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: ggg
+      NEXT_PUBLIC_TENANT_ID: ggg
+      ODOO_URL: http://odoo:8069
+      GHOST_URL: https://blog.woodworkingeorge.com
+      GHOST_CONTENT_KEY: ${GHOST_KEY_GGG}
+    depends_on:
+      odoo:
+        condition: service_started
+
+  nursery:
+    image: ghcr.io/goldberry-playground/grove-nursery:{{NURSERY_TAG}}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TENANT_ID: nursery
+      NEXT_PUBLIC_TENANT_ID: nursery
+      ODOO_URL: http://odoo:8069
+      GHOST_URL: https://blog.atthegrovenursery.com
+      GHOST_CONTENT_KEY: ${GHOST_KEY_NURSERY}
+    depends_on:
+      odoo:
+        condition: service_started
+
+volumes:
+  pg_data:
+  odoo_filestore:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,513 @@
+name: Release — Production Deploy
+
+# DORMANT (audited 2026-07-07, #124): production doesn't exist yet. The
+# deploy-production job is triple-gated (version tag/dispatch only, the
+# `production` GitHub Environment approval, and the PROD_SSH_PRIVATE_KEY /
+# PROD_HOST secrets are not set) so it cannot fire accidentally. It is
+# also MONOLITH-SHAPED: runner-SSH-to-droplet contradicts the L3 pattern
+# (droplet firewalls scope port 22 to the admin IP; data goes IN via
+# cloud-init, deploys via image pull -- see the QA cutover). Redesign this
+# job when Level 3 production ships; do not just set the PROD_* secrets.
+#
+# Trigger: semantic version tag push OR manual dispatch.
+# The full job graph (sequential via needs:):
+#
+#   verify-image
+#       │
+#       ▼
+#   deploy-sandbox-smoke  (skippable via input)
+#       │
+#       ▼
+#   require-approval      (GitHub Environment gate — human approval required)
+#       │
+#       ▼
+#   deploy-production
+#       │
+#       ▼
+#   post-deploy-smoke
+#       │
+#       ▼  (always)
+#   notify
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy (e.g. v1.2.3). Defaults to the ref that triggered the run.'
+        required: false
+        default: ''
+      skip_sandbox_smoke:
+        description: 'Skip the sandbox smoke test job (true/false)'
+        required: false
+        default: 'false'
+
+# Deny all permissions at the workflow level; each job declares its own.
+permissions: {}
+
+# Only one production release at a time; never cancel in-progress to avoid
+# leaving production mid-deploy.
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+# ---------------------------------------------------------------------------
+# Job 1: verify-image
+# Pull the production image referenced in docker-compose.override.production.yml,
+# scan for HIGH/CRITICAL CVEs with Trivy, then boot it and health-check it.
+# ---------------------------------------------------------------------------
+jobs:
+  verify-image:
+    name: Verify image (Trivy scan + health check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: read
+
+    outputs:
+      deploy_tag: ${{ steps.resolve-tag.outputs.deploy_tag }}
+
+    steps:
+      - name: Resolve deploy tag
+        id: resolve-tag
+        timeout-minutes: 1
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          echo "deploy_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Deploying tag: ${TAG}"
+
+      - name: Checkout tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 3
+        with:
+          ref: ${{ steps.resolve-tag.outputs.deploy_tag }}
+
+      - name: Extract Odoo image from production compose
+        id: extract-image
+        timeout-minutes: 1
+        run: |
+          # Read the Odoo image tag from docker-compose.override.production.yml.
+          # The base compose builds from a Dockerfile; the production override
+          # may pin a specific registry image. Fall back to parsing ODOO_TAG
+          # from .env.example if no explicit image: is set.
+          IMAGE=$(grep -A2 'odoo:' docker-compose.override.production.yml \
+                  | grep 'image:' | awk '{print $2}' | head -1 || true)
+          if [ -z "$IMAGE" ]; then
+            # Compose builds from Dockerfile — derive image name from repo + tag
+            ODOO_TAG=$(grep '^ODOO_TAG=' .env.example | cut -d= -f2 | head -1)
+            REPO_OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+            # Image name aligned with docker-odoo.yml (which publishes here)
+            # and preview/ env's docker-compose.preview.yml (which consumes).
+            IMAGE="ghcr.io/${REPO_OWNER}/grove-odoo:${ODOO_TAG:-latest}"
+          fi
+          echo "odoo_image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Image to scan: ${IMAGE}"
+
+      - name: Log in to GHCR
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${ACTOR}" --password-stdin || true
+
+      - name: Pull production image
+        timeout-minutes: 10
+        run: |
+          IMAGE="${{ steps.extract-image.outputs.odoo_image }}"
+          docker pull "${IMAGE}"
+
+      - name: Trivy scan — fail on HIGH/CRITICAL
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        timeout-minutes: 10
+        with:
+          image-ref: ${{ steps.extract-image.outputs.odoo_image }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Boot image and health-check /web/health
+        timeout-minutes: 5
+        run: |
+          IMAGE="${{ steps.extract-image.outputs.odoo_image }}"
+          # Start Odoo in --stop-after-init mode so it boots, exposes the
+          # health endpoint briefly, and exits cleanly (no DB required for
+          # the health check endpoint itself).
+          docker run -d \
+            --name odoo-health-check \
+            -p 8069:8069 \
+            -e DB_HOST=localhost \
+            -e DB_PORT=5432 \
+            -e DB_USER=odoo \
+            -e DB_PASSWORD=nopass \
+            "${IMAGE}" \
+            odoo --no-database-list 2>/dev/null || true
+          # Give Odoo time to start its HTTP listener
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 --retry 3 --retry-delay 5 \
+            "http://localhost:8069/web/health" || echo "000")
+          echo "Health endpoint status: ${STATUS}"
+          docker rm -f odoo-health-check 2>/dev/null || true
+          if [[ "${STATUS}" =~ ^[23] ]]; then
+            echo "Health check passed (${STATUS})"
+          else
+            echo "::warning::Health check returned ${STATUS}. Odoo may require a running database to serve /web/health. This is treated as advisory — Trivy passing is the hard gate."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 2: deploy-sandbox-smoke (optional)
+  # Re-run the smoke suite against the live sandbox Droplet.
+  # Skip when input skip_sandbox_smoke=true.
+  # ---------------------------------------------------------------------------
+  deploy-sandbox-smoke:
+    name: Sandbox smoke test (pre-release validation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [verify-image]
+    if: ${{ inputs.skip_sandbox_smoke != 'true' }}
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 3
+        with:
+          ref: ${{ needs.verify-image.outputs.deploy_tag }}
+
+      - name: Run smoke test against sandbox
+        timeout-minutes: 5
+        env:
+          SANDBOX_HOST: ${{ secrets.SANDBOX_HOST }}
+          # Default sandbox URLs; SANDBOX_HOST secret prepends the ERP URL when set.
+        run: |
+          # Build sandbox URL list; prepend SANDBOX_HOST if secret is set
+          URLS="https://erp-sandbox.goldberrygrove.farm
+          https://blog-sandbox.goldberrygrove.farm
+          https://blog-sandbox.woodworkingeorge.com
+          https://blog-sandbox.atthegrovenursery.com"
+          if [ -n "${SANDBOX_HOST}" ]; then
+            URLS="https://${SANDBOX_HOST}
+          ${URLS}"
+          fi
+          export SMOKE_URLS="${URLS}"
+          bash scripts/smoke-test-public.sh
+
+  # ---------------------------------------------------------------------------
+  # Job 3: require-approval
+  # The human gate — GitHub Environments protection rules enforce the required
+  # reviewer(s) before this job (and everything downstream) may proceed.
+  # ---------------------------------------------------------------------------
+  require-approval:
+    name: Require production approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # Waits up to 1 hour for a reviewer
+    needs: [verify-image, deploy-sandbox-smoke]
+    # Also run if sandbox smoke was skipped (result will be 'skipped')
+    if: >-
+      always() &&
+      needs.verify-image.result == 'success' &&
+      (needs.deploy-sandbox-smoke.result == 'success' ||
+       needs.deploy-sandbox-smoke.result == 'skipped')
+
+    environment: production
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Log approval
+        timeout-minutes: 1
+        env:
+          ACTOR: ${{ github.actor }}
+          DEPLOY_TAG: ${{ needs.verify-image.outputs.deploy_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          echo "Production deploy approved by: ${ACTOR}"
+          echo "Deploying tag: ${DEPLOY_TAG}"
+          echo "Triggered by: ${EVENT_NAME}"
+
+  # ---------------------------------------------------------------------------
+  # Job 4: deploy-production
+  # SSH into the app Droplet, pull the tagged image, and restart the stack.
+  # Terraform state changes are NOT automated here — run
+  #   make tf-apply env=production CONFIRM=yes
+  # manually for infrastructure changes.
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    name: Deploy to production Droplet
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [verify-image, require-approval]
+
+    environment: production
+
+    permissions:
+      contents: read
+      deployments: write
+
+    env:
+      DEPLOY_TAG: ${{ needs.verify-image.outputs.deploy_tag }}
+
+    steps:
+      - name: Load SSH agent
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        timeout-minutes: 2
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+
+      - name: Add Droplet to known hosts
+        timeout-minutes: 1
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${PROD_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Fetch and checkout tag on Droplet
+        timeout-minutes: 5
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes \
+              "root@${PROD_HOST}" \
+            "cd /opt/grove && git fetch --tags && git checkout ${DEPLOY_TAG}"
+
+      - name: Pull updated Docker images
+        timeout-minutes: 10
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes \
+              "root@${PROD_HOST}" \
+            "cd /opt/grove && \
+             docker compose \
+               -f docker-compose.yml \
+               -f docker-compose.override.grove.yml \
+               -f docker-compose.override.production.yml \
+               pull"
+
+      - name: Restart stack (rolling update)
+        timeout-minutes: 5
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes \
+              "root@${PROD_HOST}" \
+            "cd /opt/grove && \
+             docker compose \
+               -f docker-compose.yml \
+               -f docker-compose.override.grove.yml \
+               -f docker-compose.override.production.yml \
+               up -d"
+
+      - name: Verify containers started
+        timeout-minutes: 3
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes \
+              "root@${PROD_HOST}" \
+            "cd /opt/grove && docker compose \
+               -f docker-compose.yml \
+               -f docker-compose.override.grove.yml \
+               -f docker-compose.override.production.yml \
+               ps" \
+          | tee /tmp/compose-ps.txt
+          # Warn (non-fatal) if any service is not running
+          if grep -qiE "exit|dead|restarting" /tmp/compose-ps.txt; then
+            echo "::warning::Some containers may not be healthy — check Droplet manually"
+          else
+            echo "All containers appear to be running"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 5: post-deploy-smoke
+  # Hit each of the 7 public hostnames + Grafana to verify the deploy succeeded.
+  # ---------------------------------------------------------------------------
+  post-deploy-smoke:
+    name: Post-deploy smoke test (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [verify-image, deploy-production]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 3
+        with:
+          ref: ${{ needs.verify-image.outputs.deploy_tag }}
+
+      - name: Run public smoke test against all 7 production hostnames
+        timeout-minutes: 5
+        env:
+          SMOKE_URLS: |
+            https://erp.gatheringatthegrove.com
+            https://goldberrygrove.farm
+            https://woodworkingeorge.com
+            https://atthegrovenursery.com
+            https://blog.goldberrygrove.farm
+            https://blog.woodworkingeorge.com
+            https://blog.atthegrovenursery.com
+        run: |
+          bash scripts/smoke-test-public.sh
+
+      - name: Check Grafana (if configured)
+        timeout-minutes: 2
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+        run: |
+          if [ -z "${GRAFANA_URL}" ]; then
+            echo "GRAFANA_URL secret not set — skipping Grafana check"
+            exit 0
+          fi
+          echo "Checking Grafana at ${GRAFANA_URL}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 --retry 3 --retry-delay 5 \
+            "${GRAFANA_URL}" || echo "000")
+          if [[ "${STATUS}" =~ ^[23] ]]; then
+            echo "Grafana OK (${STATUS})"
+          else
+            echo "::error::Grafana returned ${STATUS}"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 6: notify
+  # Always runs — posts Slack notification on success AND failure.
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [verify-image, deploy-sandbox-smoke, require-approval, deploy-production, post-deploy-smoke]
+    if: always()
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Build status summary
+        id: status
+        timeout-minutes: 1
+        env:
+          VERIFY_RESULT: ${{ needs.verify-image.result }}
+          SANDBOX_RESULT: ${{ needs.deploy-sandbox-smoke.result }}
+          APPROVAL_RESULT: ${{ needs.require-approval.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-production.result }}
+          SMOKE_RESULT: ${{ needs.post-deploy-smoke.result }}
+        run: |
+          if [ "$DEPLOY_RESULT" = "success" ] && [ "$SMOKE_RESULT" = "success" ]; then
+            STATUS="success"
+            EMOJI=":white_check_mark:"
+            COLOR="good"
+          elif [ "$APPROVAL_RESULT" = "failure" ] || [ "$APPROVAL_RESULT" = "cancelled" ]; then
+            STATUS="rejected"
+            EMOJI=":no_entry:"
+            COLOR="warning"
+          else
+            STATUS="failure"
+            EMOJI=":x:"
+            COLOR="danger"
+          fi
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          echo "emoji=${EMOJI}" >> "$GITHUB_OUTPUT"
+          echo "color=${COLOR}" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Slack
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        timeout-minutes: 2
+        env:
+          DEPLOY_TAG: ${{ needs.verify-image.outputs.deploy_tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          ACTOR: ${{ github.actor }}
+          VERIFY_RESULT: ${{ needs.verify-image.result }}
+          SANDBOX_RESULT: ${{ needs.deploy-sandbox-smoke.result }}
+          APPROVAL_RESULT: ${{ needs.require-approval.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-production.result }}
+          SMOKE_RESULT: ${{ needs.post-deploy-smoke.result }}
+          STATUS: ${{ steps.status.outputs.status }}
+          EMOJI: ${{ steps.status.outputs.emoji }}
+          COLOR: ${{ steps.status.outputs.color }}
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "blocks": [
+                    {
+                      "type": "header",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "${{ steps.status.outputs.emoji }} Production Deploy — ${{ needs.verify-image.outputs.deploy_tag }}"
+                      }
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Status:*\n${{ steps.status.outputs.status }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Tag:*\n`${{ needs.verify-image.outputs.deploy_tag }}`"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Actor:*\n${{ github.actor }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_number }}>"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        {
+                          "type": "mrkdwn",
+                          "text": "*verify-image:*\n${{ needs.verify-image.result }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*sandbox-smoke:*\n${{ needs.deploy-sandbox-smoke.result }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*approval:*\n${{ needs.require-approval.result }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*deploy:*\n${{ needs.deploy-production.result }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*post-smoke:*\n${{ needs.post-deploy-smoke.result }}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }

@@ -1,0 +1,38 @@
+# Keep provider definitions — Discord webhooks for Grove notifications.
+#
+# Consumed by scripts/setup-monitoring.py which POSTs each provider to
+# Keep's /api/v1/providers endpoint. Idempotent — upserts by name.
+#
+# Webhook URLs are substituted at bootstrap time from .env.monitoring
+# (DISCORD_WEBHOOK_WARNING and DISCORD_WEBHOOK_CRITICAL).
+#
+# Two separate Discord webhooks (one per channel) instead of a single
+# webhook with conditional content because Discord's webhook → channel
+# binding is fixed at webhook creation. The severity routing is in
+# workflows.yml; this file only declares the delivery endpoints.
+
+providers:
+  - id: discord-warning
+    type: discord
+    name: "Discord — Grove warnings"
+    description: |
+      Routes warning-severity alerts to #grove-alerts-warning.
+      Lower-urgency: HTTP non-2xx for >60s, response time degradation,
+      Ghost CMS down, SSL expiring <14 days. No @mention — won't ping
+      anyone, just visible in channel.
+    config:
+      webhook_url: "{DISCORD_WEBHOOK_WARNING}"
+    tags: [grove, warning, discord]
+
+  - id: discord-critical
+    type: discord
+    name: "Discord — Grove criticals"
+    description: |
+      Routes critical-severity alerts to #grove-alerts-critical.
+      High-urgency: service down >30s (frontend/Odoo/Postgres), data-plane
+      unavailable. Includes @here in message body to ping channel members
+      who are online — substitutes for paid PagerDuty on the solo-dev
+      cost-conscious tier.
+    config:
+      webhook_url: "{DISCORD_WEBHOOK_CRITICAL}"
+    tags: [grove, critical, discord]

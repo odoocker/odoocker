@@ -1,0 +1,16 @@
+# github-rulesets — variable template.
+#
+# Provider credentials (github_token) must NEVER live in a real tfvars file.
+# Inject at run time from 1Password as TF_VAR_github_token, e.g.:
+#
+#   op run --env-file ./op.env -- terraform plan
+#
+# where op.env maps:
+#   TF_VAR_github_token = op://Goldberry Grove - Admin/<admin-scoped item>/github_admin_token
+#
+# The token MUST carry Administration: Read and Write on the target repo (see
+# variables.tf). This is a stricter scope than the bootstrap/state-backend PAT.
+
+# github_owner               = "Goldberry-Playground"   # default
+# ruleset_repo               = "odoocker-goldberrygrove" # default
+# agenticos_developer_app_id = 4134853                   # default (AgenticOS Developer app)

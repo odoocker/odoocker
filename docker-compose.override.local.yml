@@ -1,6 +1,10 @@
 services:
   odoo:
     restart: 'no'
+    volumes:
+      # Bind mount local grove-odoo-modules clone for instant code changes.
+      # Overrides the git-sync shared volume — no git-sync needed locally.
+      - ../grove-odoo-modules:/workspace/current
     ports:
       - 8069:8069
       - 8070:8070
@@ -12,23 +16,107 @@ services:
     ports:
       - 5432:5432
 
+  custom-modules-sync:
+    restart: 'no'
+
   nginx:
     restart: 'no'
+    volumes:
+      # Layer the dev-only CORS origins (localhost:3000-3003) alongside
+      # the prod allowlist. The base compose mounts ./nginx/snippets
+      # (prod-safe content only); this single-file mount adds the dev
+      # file at the same /etc/nginx/snippets/cors-allowlist-dev.conf path
+      # that cors-allowlist.conf includes via wildcard. The prod stack
+      # never sees this file, so prod responses cannot echo
+      # Access-Control-Allow-Origin for any http://localhost:* request.
+      - ./nginx/snippets-dev/cors-allowlist-dev.conf:/etc/nginx/snippets/cors-allowlist-dev.conf:ro
 
   nginx-proxy:
     restart: 'no'
     ports:
       - 80:80
       - 443:443
+    volumes:
+      # Same dev-allowlist overlay as the inner nginx — both tiers must
+      # agree on the origin set, or a preflight that succeeds on one tier
+      # will fail on the other.
+      - ./nginx/snippets-dev/cors-allowlist-dev.conf:/etc/nginx/snippets/cors-allowlist-dev.conf:ro
 
   letsencrypt:
     restart: 'no'
 
+  ghost-goldberry:
+    restart: 'no'
+    ports:
+      - 2368:2368
+
+  ghost-ggg:
+    restart: 'no'
+    ports:
+      - 2369:2369
+
+  ghost-nursery:
+    restart: 'no'
+    ports:
+      - 2370:2370
+
+  # ── Frontends — direct ports + nginx-proxy vhosts for local dev ──────────
+  # Two ways to reach each frontend locally:
+  #   1. Direct host port (fast iteration, no TLS/vhost):
+  #        hub → :3000, goldberry → :3001, ggg → :3002, nursery → :3003
+  #   2. Behind nginx-proxy on :80 via a `<name>.localhost` vhost — this is
+  #      what GOL-5 ("serves all 4 frontends locally behind nginx") needs.
+  #      `*.localhost` resolves to 127.0.0.1 in modern browsers and curl, so
+  #      `curl http://hub.localhost` hits nginx-proxy → routed to hub:3000.
+  # The VIRTUAL_HOST values default here (override.grove.yml leaves them empty
+  # so prod/preview opt in explicitly); override per-host via .env if desired.
+  # Container-internal ports come from each Dockerfile's `ENV PORT=...`
+  # (storefronts: 3001, hub: 3000); VIRTUAL_PORT is set in the grove overlay.
+
+  hub:
+    restart: 'no'
+    environment:
+      VIRTUAL_HOST: ${HUB_VIRTUAL_HOST:-hub.localhost}
+    ports:
+      - ${HUB_PORT:-3000}:3000
+
+  goldberry:
+    restart: 'no'
+    environment:
+      VIRTUAL_HOST: ${GOLDBERRY_VIRTUAL_HOST:-goldberry.localhost}
+    ports:
+      - ${GOLDBERRY_PORT:-3001}:3001
+
+  ggg:
+    restart: 'no'
+    environment:
+      VIRTUAL_HOST: ${GGG_VIRTUAL_HOST:-ggg.localhost}
+    ports:
+      - ${GGG_PORT:-3002}:3001
+
+  nursery:
+    restart: 'no'
+    environment:
+      VIRTUAL_HOST: ${NURSERY_VIRTUAL_HOST:-nursery.localhost}
+    ports:
+      - ${NURSERY_PORT:-3003}:3001
+
   redis:
     restart: 'no'
+    # Loopback-only — never bind 0.0.0.0 even in local dev. An OrbStack
+    # host shared on a coffee-shop LAN would otherwise expose a
+    # passwordless KeyDB to every device on the network.
+    ports:
+      - 127.0.0.1:${KEYDB_PORT}:${KEYDB_PORT}
 
   s3:
     restart: 'no'
+    # Same loopback-only rationale as redis. The MinIO console is also
+    # reachable via the nginx-proxy VIRTUAL_HOST entry in production —
+    # this port mapping is purely for direct local access (e.g. `mc alias`).
+    ports:
+      - 127.0.0.1:${MINIO_API_PORT}:${MINIO_API_PORT}
+      - 127.0.0.1:${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
 
   pgadmin:
     restart: 'no'

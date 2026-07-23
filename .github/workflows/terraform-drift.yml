@@ -1,0 +1,200 @@
+name: Terraform Drift Detection
+
+# Detect configuration drift in production.
+#
+# DISABLED on cron until M4 ships (production droplet exists). The production/
+# TF env has resource declarations but nothing's been applied — so terraform
+# plan would correctly report "would create N resources" on every run, which
+# this workflow would interpret as drift and spam Discord. The honest answer
+# is to not run automatically until there's something real to drift against.
+#
+# workflow_dispatch stays enabled for manual testing — the OIDC retrofit was
+# verified end-to-end via this exact path on 2026-06-23 (run 28048255444:
+# secrets fetched via Infisical OIDC, terraform init succeeded, plan failed
+# only on the missing-prod-vars precondition which is the unrelated issue).
+#
+# Re-enable plan:
+#   1. M4 lands and production droplet is applied (with real ssh_key_ids)
+#   2. Uncomment the cron schedule line below
+#   3. Add `TF_VAR_ssh_key_ids` to the job env (sourced from Infisical or
+#      provided as a literal list — see infra/terraform/environments/
+#      production/variables.tf for the required shape)
+on:
+  # schedule:
+  #   - cron: "0 14 * * *"  # re-enable when M4 ships — see header comment
+  workflow_dispatch: {}
+
+# id-token: write is required for the Infisical OIDC fetch step to mint a
+# GitHub-signed JWT for workload identity federation. Per ADR 003: secrets
+# come from Infisical via OIDC, not from GH Secrets. See
+# memory/feedback_oidc_trust_policy_pattern.md for the trust-policy shape
+# bound on the Infisical identity (repository + workflow_ref + ref, literals).
+permissions: {}
+
+concurrency:
+  # Keyed to the production Terraform state (`production/terraform.tfstate`)
+  # so drift plans serialize with each other and with any future production
+  # apply that adopts this same group (GOL-34 item 3a). Drift is plan-only
+  # today, but a plan still refreshes/locks state, so overlapping runs are
+  # not safe. cancel-in-progress:false — let an in-flight plan finish.
+  group: terraform-qa-app-platform
+  cancel-in-progress: false
+
+jobs:
+  drift-detect:
+    name: Detect qa-app-platform drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      id-token: write   # OIDC token minted for Infisical exchange (read-only scope)
+
+    env:
+      # Repointed 2026-07-04: was the production STUB (gated, never applied
+      # -- drift-watching it was theater). Now watches the LIVE Level 3 QA
+      # env. assets/ + cloudflare-policy/ drift coverage: follow-up (needs
+      # their extra TF_VARs mirrored to Infisical first).
+      TF_DIR: infra/terraform/environments/qa-app-platform
+      # ── Infisical identity assignment ──────────────────────────────────
+      # Identity:   gh-oidc-odoocker-shared (UUID c502a60d-4b37-4e15-9fd7-8186c80c2ad0)
+      # Project:    grove-odoocker (slug grove-odoocker-qu8p)
+      # Trust:      bound_subject repo+ref; NO workflow_ref binding (shared)
+      # Co-tenants: sandbox-reaper.yml, sandbox-deploy.yml, docker-odoo.yml
+      #             — see infra/terraform/environments/infisical-identities/README.md
+      #             for the canonical mapping table and the rationale for
+      #             which workflows are "shared" vs "strict per-workflow".
+      # Secrets fetched: DIGITALOCEAN_TOKEN, DISCORD_OPS_WEBHOOK_URL,
+      #                  SPACES_ACCESS_KEY_ID, SPACES_SECRET_ACCESS_KEY
+      # NEVER reference secrets.* here — that's the pre-OIDC pattern.
+      #
+      # Slug-vs-UUID gotcha: Infisical/secrets-action uses the project SLUG
+      # (`project-slug`), the CLI uses the UUID (`--projectId`). Slug is
+      # auto-suffixed for global uniqueness (project NAMED "grove-odoocker"
+      # has SLUG "grove-odoocker-qu8p"). Don't try to "fix" by passing UUID.
+      INFISICAL_PROJECT_SLUG: grove-odoocker-qu8p
+      INFISICAL_ENV_SLUG: prod
+      INFISICAL_IDENTITY_ID: c502a60d-4b37-4e15-9fd7-8186c80c2ad0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      # Fetch secrets from Infisical Cloud using GitHub OIDC. The action mints
+      # an OIDC JWT (via permissions: id-token: write), POSTs to Infisical's
+      # /api/v1/auth/oidc-auth/login, gets back a short-lived access token,
+      # fetches secrets, and exports each as an env var available to all
+      # subsequent steps in this job. See identity assignment block above.
+      - name: Fetch secrets from Infisical (OIDC)
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        timeout-minutes: 2
+        with:
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV_SLUG }}
+          secret-path: /
+          export-type: env
+
+      # The TF S3 backend reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY but
+      # Infisical holds them under their canonical SPACES_* names (they're DO
+      # Spaces, not AWS). Alias here so we don't have to fork a second copy
+      # in Infisical.
+      - name: Alias SPACES_* env vars to AWS_* for TF S3 backend
+        timeout-minutes: 1
+        run: |
+          echo "AWS_ACCESS_KEY_ID=$SPACES_ACCESS_KEY_ID" >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$SPACES_SECRET_ACCESS_KEY" >> "$GITHUB_ENV"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        timeout-minutes: 3
+        with:
+          terraform_version: "~1.10" # GOL-40: use_lockfile requires >= 1.10
+
+      - name: Write backend config
+        timeout-minutes: 1
+        run: |
+          cat > "$TF_DIR/backend.hcl" <<'EOF'
+          endpoint                    = "https://nyc3.digitaloceanspaces.com"
+          bucket                      = "grove-tf-state"
+          key                         = "qa-app-platform/terraform.tfstate"
+          region                      = "us-east-1"
+          skip_credentials_validation = true
+          skip_metadata_api_check     = true
+          skip_region_validation      = true
+          skip_requesting_account_id  = true
+          force_path_style            = true
+          EOF
+
+      - name: Map env-specific TF vars
+        timeout-minutes: 1
+        run: |
+          {
+            echo "TF_VAR_do_token=$DIGITALOCEAN_TOKEN"
+            echo "TF_VAR_cloudflare_api_token=$CLOUDFLARE_API_TOKEN"
+            echo "TF_VAR_grove_revalidate_secret=$GROVE_REVALIDATE_SECRET"
+            # map(string) var: Infisical stores the JSON object verbatim
+            echo "TF_VAR_odoo_api_keys=$ODOO_API_KEYS_TF_JSON"
+          } >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        timeout-minutes: 5
+        run: |
+          terraform -chdir="$TF_DIR" init \
+            -backend-config=backend.hcl \
+            -input=false
+
+      - name: Terraform plan (drift check)
+        id: plan
+        timeout-minutes: 10
+        # Exit codes: 0 = no changes, 1 = error, 2 = changes detected (drift)
+        #
+        # Capture via PIPESTATUS[0] (not $?). $? would give tee's exit code
+        # (always 0), masking real terraform failures and never letting drift
+        # detection fire. This bug shipped on day one and went unnoticed
+        # until the OIDC retrofit forced a real test (2026-06-23, run
+        # 28048255444 showed terraform plan exiting 1 with no workflow
+        # failure annotation).
+        run: |
+          set +e
+          terraform -chdir="$TF_DIR" plan \
+            -detailed-exitcode \
+            -input=false \
+            -out=tfplan.binary 2>&1 | tee plan.txt
+          EXIT_CODE="${PIPESTATUS[0]}"
+          echo "exitcode=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          set -e
+          # Fail hard on real errors; exit 2 (drift) is handled below
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "::error::terraform plan failed with an error"
+            exit 1
+          fi
+
+      # Discord webhook (consolidates with the GATH-44 monitoring stack's
+      # Discord alerting). One webhook URL, distinct sender label per workflow
+      # via the embed's `username` field.
+      - name: Alert Discord on drift
+        if: steps.plan.outputs.exitcode == '2'
+        timeout-minutes: 1
+        env:
+          # DISCORD_OPS_WEBHOOK_URL is set by the Infisical OIDC fetch step
+          # at the top of the job — no secrets.* reference needed.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg run_url "$RUN_URL" \
+            '{
+              username: "🌊 Terraform Drift",
+              embeds: [{
+                title: "⚠️ Production drift detected",
+                description: "`terraform plan` returned exit code 2 — real infrastructure differs from state.",
+                url: $run_url,
+                color: 15158332
+              }]
+            }')
+          curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_OPS_WEBHOOK_URL"

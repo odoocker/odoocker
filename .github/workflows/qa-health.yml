@@ -1,0 +1,92 @@
+name: QA Health
+
+###############################################################################
+# Synthetic monitoring for the Level 3 QA env -- the replacement for the
+# retired monolith deploy-pipeline alerting. Every 15 minutes: probe the 7
+# public hostnames + the 4 App Platform deployment phases, and speak Discord
+# with the same streak/recovery grammar the old pipeline used
+# (RECOVERED / FAILED / FAILED 2nd / RECURRING @here).
+#
+# Noise policy: healthy runs post NOTHING (--quiet-success). Discord only
+# hears about failures and recoveries. Streak state = this workflow's own
+# gh run history, so no external storage.
+#
+# Deep-metrics monitoring (OpenObserve monitors -> Keep -> Discord) is the
+# ADR-008 end-state and tracked separately -- this workflow is the
+# is-it-up layer that works even when the obs plane itself is down.
+###############################################################################
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: qa-health
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: L3 QA health sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    permissions:
+      contents: read
+      id-token: write   # OIDC for Infisical
+      actions: read     # discord-status.sh reads this workflow's run history for streaks
+
+    env:
+      INFISICAL_PROJECT_SLUG: grove-odoocker-qu8p
+      INFISICAL_ENV_SLUG: prod
+      INFISICAL_IDENTITY_ID: c502a60d-4b37-4e15-9fd7-8186c80c2ad0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      - name: Fetch secrets from Infisical (OIDC)
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        timeout-minutes: 2
+        with:
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV_SLUG }}
+          secret-path: /
+          export-type: env
+
+      - name: Run health sweep
+        id: sweep
+        timeout-minutes: 5
+        # continue-on-error so the Discord step always runs; the final step
+        # re-asserts the sweep's exit code as the run conclusion (which is
+        # what future runs' streak detection reads).
+        continue-on-error: true
+        run: |
+          bash scripts/qa-health-sweep.sh | tee sweep.out
+          echo "rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Discord (failures + recoveries only)
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.sweep.outputs.rc }}" = "0" ]; then STATUS=success; else STATUS=failure; fi
+          DETAIL=$(grep -E "FAIL|RESULT" sweep.out | head -6 | tr '\n' ';' | head -c 900)
+          bash scripts/discord-status.sh \
+            --status="$STATUS" \
+            --workflow=qa-health.yml \
+            --run-url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --title="QA Health (L3)" \
+            --description="$DETAIL" \
+            --quiet-success || true
+
+      - name: Assert sweep result as run conclusion
+        env:
+          RC: ${{ steps.sweep.outputs.rc }}
+        run: |
+          case "$RC" in 0|1) exit "$RC" ;; *) exit 1 ;; esac

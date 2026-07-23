@@ -1,0 +1,5 @@
+# All sensitive values arrive via op run TF_VAR_ injection - never fill them here.
+admin_ip_cidr         = "203.0.113.7/32"
+region                = "nyc3"
+blogs_droplet_size    = "s-2vcpu-2gb"
+healthchecks_ping_url = "https://hc-ping.com/REPLACE-UUID"

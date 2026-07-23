@@ -1,0 +1,13 @@
+# Copy to backend.hcl (git-ignored) before running `terraform init`. The
+# bucket + DO Spaces region are the same as every other TF env's backend;
+# only `key` differs per env so each env's state lives in its own object.
+
+endpoint                    = "https://nyc3.digitaloceanspaces.com"
+bucket                      = "grove-tf-state"
+key                         = "infisical-identities/terraform.tfstate"
+region                      = "us-east-1"
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_requesting_account_id  = true
+force_path_style            = true

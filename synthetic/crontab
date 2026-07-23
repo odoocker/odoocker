@@ -1,0 +1,6 @@
+# supercronic crontab for the Grove synthetic Tier-1 runner.
+# Every minute: run all journeys (shared health + per-tenant catalog/cart) and
+# ship results to OpenObserve as OTLP metrics. supercronic logs each run to
+# stdout and exits non-zero only on a scheduler fault (never on a journey
+# failure — those are reported as metrics by run.py).
+* * * * * python3 /app/run.py

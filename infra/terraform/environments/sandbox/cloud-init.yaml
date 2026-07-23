@@ -1,0 +1,58 @@
+#cloud-config
+# Sandbox Droplet bootstrap — installs Docker, clones the repo at the pinned
+# SHA, and starts the stack. Terraform renders this as user_data via
+# templatefile() and substitutes ${git_sha} and ${repo_url}.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - docker.io
+  - docker-compose-plugin
+  - git
+  - curl
+  - jq
+  - make
+
+runcmd:
+  # Enable + start Docker
+  - systemctl enable --now docker
+
+  # Mount the attached block volume at /data
+  - |
+    DEVICE=$(lsblk -rno NAME,TYPE | awk '$2=="disk" {print "/dev/"$1}' | grep -v sda | head -1)
+    if [ -n "$DEVICE" ] && ! grep -q "/data" /etc/fstab; then
+      mkdir -p /data
+      if ! blkid "$DEVICE" | grep -q ext4; then
+        mkfs.ext4 -L data "$DEVICE"
+      fi
+      echo "LABEL=data /data ext4 defaults,nofail 0 2" >> /etc/fstab
+      mount -a
+    fi
+
+  # Clone at exact SHA
+  - git clone ${repo_url} /opt/grove
+  - git -C /opt/grove checkout ${git_sha}
+
+  # Signal that cloud-init has reached this stage (polled by CI)
+  - touch /var/lib/cloud/instance/clone-done
+
+  # Start sandbox stack — .env.sandbox is SCP'd in by CI before this runs
+  # (cloud-init waits; CI polls /var/lib/cloud/instance/clone-done then SCP)
+  - |
+    until [ -f /opt/grove/.env.sandbox ]; do
+      echo "Waiting for .env.sandbox..."
+      sleep 5
+    done
+  - >
+    docker compose
+    -f /opt/grove/docker-compose.yml
+    -f /opt/grove/docker-compose.override.grove.yml
+    -f /opt/grove/docker-compose.override.sandbox.yml
+    --env-file /opt/grove/.env.sandbox
+    --profile odoo --profile postgres --profile ghost
+    -p grove-sandbox
+    up -d
+  - touch /var/lib/cloud/instance/stack-up
+
+final_message: "Grove sandbox bootstrap complete. SHA=${git_sha}"

@@ -1,0 +1,16 @@
+# Local TF state — never committed; tracked only by this operator's machine
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.*.backup
+.terraform/
+crash.log
+crash.*.log
+
+# Operator-specific tfvars (real values). The .example file IS committed.
+terraform.tfvars
+*.auto.tfvars
+
+# Override the root .gitignore exclusion of .env.* — this specific file is
+# an op-run template that contains op:// references (not secret values) and
+# is meant to be committed so every operator uses the same template.
+!.env.op

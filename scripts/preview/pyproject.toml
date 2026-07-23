@@ -1,0 +1,22 @@
+[project]
+name = "grove-preview-sanitizer"
+version = "0.1.0"
+description = "Streaming pg_dump column rewriter that produces sanitized prod snapshots for Grove preview environments."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.0",
+    "bcrypt>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

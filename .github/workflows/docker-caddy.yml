@@ -1,0 +1,177 @@
+name: Docker -- Caddy w/ DO DNS plugin
+
+###############################################################################
+# Build + push the grove-caddy image (Caddy + caddy-dns/digitalocean plugin).
+#
+# Compose used to `build:` this on the droplet every deploy via xcaddy. That
+# added ~30s to each first-time compose-up AND meant a transient go-module
+# fetch failure could break a deploy. Moving the build to CI:
+#   - Removes ~30s from every cold deploy
+#   - Lets the GHCR preflight check (scripts/check-ghcr-images.sh) catch
+#     build/availability problems BEFORE the droplet boots
+#   - Caches build layers across CI runs (faster than fresh on each droplet)
+#
+# Triggers: changes to caddy.Dockerfile or this workflow. PR builds + scans;
+# main pushes + tags :latest and :<sha>.
+#
+# Resulting image: ghcr.io/goldberry-playground/grove-caddy:{latest,<sha>}
+# Consumed by: infra/terraform/environments/qa-app-platform/compose/docker-compose.qa.yml
+#
+# FIRST-PUBLISH NOTE: GHCR packages are private by default. The very first
+# push from main will create the package private. Make it public via:
+#   https://github.com/orgs/goldberry-playground/packages
+#   -> grove-caddy -> Package settings -> Change visibility -> Public
+# Otherwise the QA droplet (anonymous puller) gets 403 on docker compose pull.
+# Same one-time setup that grove-odoo + grove-* frontends required.
+###############################################################################
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/terraform/environments/qa-app-platform/compose/caddy.Dockerfile"
+      - ".github/workflows/docker-caddy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/environments/qa-app-platform/compose/caddy.Dockerfile"
+      - ".github/workflows/docker-caddy.yml"
+
+concurrency:
+  group: docker-caddy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-smoke-push:
+    name: Build + smoke + push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      TEST_TAG: test-${{ github.run_id }}
+      IMAGE_NAME: ghcr.io/goldberry-playground/grove-caddy
+      DOCKERFILE: infra/terraform/environments/qa-app-platform/compose/caddy.Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      # Audit 2026-06-29 #7: lint Dockerfile for anti-patterns (DL3008/3009
+      # class) before spending time on the build. failure-threshold: error
+      # means warnings/info surface in CI logs but don't gate the build.
+      # caddy.Dockerfile has one INTENTIONAL DL3007 (uses caddy:builder
+      # which only ships :latest and :2 tags — pinning to :2 is fine, but
+      # the existing `caddy:builder` pattern is what xcaddy docs prescribe).
+      - name: hadolint Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        timeout-minutes: 1
+        with:
+          dockerfile: infra/terraform/environments/qa-app-platform/compose/caddy.Dockerfile
+          failure-threshold: warning
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        timeout-minutes: 2
+
+      - name: Build image (local load)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        timeout-minutes: 10
+        with:
+          context: infra/terraform/environments/qa-app-platform/compose
+          file: ${{ env.DOCKERFILE }}
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+          cache-from: type=gha,scope=grove-caddy
+          cache-to: type=gha,scope=grove-caddy,mode=max
+
+      # Smoke test: image starts AND the DO DNS module is registered.
+      # `caddy list-modules` enumerates loaded plugins; we grep for the
+      # specific dns.providers.digitalocean module that the QA Caddyfile's
+      # `dns digitalocean {env.DO_API_TOKEN}` directive expects.
+      - name: Smoke test image (caddy + DO DNS plugin loaded)
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+        run: |
+          # Version check first -- catches structural breakage
+          docker run --rm "$IMAGE" caddy version || { echo "::error::caddy binary won't run"; exit 1; }
+          # Module check -- the whole point of this image
+          if ! docker run --rm "$IMAGE" caddy list-modules 2>/dev/null | grep -q 'dns.providers.digitalocean'; then
+            echo "::error::caddy-dns/digitalocean module NOT present in built image -- xcaddy build failed silently?"
+            docker run --rm "$IMAGE" caddy list-modules 2>&1 | grep -i 'dns\|digital' || true
+            exit 1
+          fi
+          echo "✓ caddy boots + DO DNS plugin registered"
+
+      # Full-stack smoke: boot caddy with a tiny static-response Caddyfile,
+      # curl localhost. Catches the "Caddyfile parser rejects this syntax"
+      # class -- exactly what PR #85 fixed for the QA Caddyfile (single-line
+      # `handle X { ... }` was strict-parser-rejected). Doesn't test TLS
+      # (DNS-01 requires real DO API + real domain control); that's the QA
+      # env's job. Just proves: the binary serves HTTP when given a config.
+      - name: Full-stack smoke (caddy serves HTTP)
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+        timeout-minutes: 2
+        run: |
+          cat > /tmp/Caddyfile <<'EOF'
+          :8080 {
+              respond "smoke-test-ok" 200
+          }
+          EOF
+          docker run -d --name caddy-smoke -p 8080:8080 \
+            -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro \
+            "$IMAGE"
+          # Caddy boots in <2s normally; 5s headroom for CI jitter.
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8080/ || echo 000)
+          body=$(curl -s --max-time 5 http://localhost:8080/ || echo "")
+          docker logs caddy-smoke --tail 30 2>&1 | tail -10 || true
+          docker rm -f caddy-smoke >/dev/null
+          if [ "$code" != "200" ] || [ "$body" != "smoke-test-ok" ]; then
+            echo "::error::caddy / returned code=$code body=$body (expected 200 / smoke-test-ok)"
+            exit 1
+          fi
+          echo "✓ caddy serves HTTP via Caddyfile"
+
+      # Audit 2026-06-29 #6: Trivy was on docker-odoo.yml but NOT here. Caddy
+      # is internet-facing (terminates TLS), so vuln-scanning matters at least
+      # as much. Same SHA pin as docker-odoo + release workflows.
+      - name: Trivy — scan image for high CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        timeout-minutes: 5
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          ignore-unfixed: true  # CVEs upstream hasn't patched yet shouldn't block CI
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        timeout-minutes: 1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        timeout-minutes: 5
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}
+          TAG: ${{ env.TEST_TAG }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker tag "$IMAGE:$TAG" "$IMAGE:latest"
+          docker tag "$IMAGE:$TAG" "$IMAGE:$SHA"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$SHA"
+          echo "Published: $IMAGE:latest and $IMAGE:$SHA"
+          echo "If this is the FIRST publish, make the package public in GHCR:"
+          echo "  https://github.com/orgs/goldberry-playground/packages -> grove-caddy"

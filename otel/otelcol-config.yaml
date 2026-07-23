@@ -1,0 +1,108 @@
+# Grove OTel Collector — USE / infrastructure metrics → OpenObserve.
+#
+# Ships the "how hard is each resource working" half of CostOps rightsizing
+# (spec §3 / §6): host CPU/RAM/disk/network + per-container CPU/RAM, joined in
+# OpenObserve with the cost-bridge's cost_resource_* to flag cost × idle.
+#
+# Runs on the app/Odoo droplet (where /proc + the Docker socket live). The
+# frontends are on App Platform (no docker_stats there) — their USE metrics come
+# from the DO-metrics bridge (do-metrics/, polls the DO Monitoring API).
+#
+# PENDING LIVE VALIDATION: the OpenObserve OTLP metrics endpoint/auth and the
+# resulting stream/field names are the documented shapes but not yet exercised
+# end-to-end — confirm on first `make monitoring-up` and adjust the exporter +
+# the alert `stream` names if needed.
+
+extensions:
+  basicauth/openobserve:
+    client_auth:
+      username: ${env:OPENOBSERVE_ROOT_EMAIL}
+      password: ${env:OPENOBSERVE_ROOT_PASSWORD}
+
+receivers:
+  # OTLP in — receives RED metrics + traces from Beyla (agent → collector →
+  # backend). Internal network, no auth needed here; the Collector's exporter
+  # adds OpenObserve auth downstream.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  # Host CPU/RAM/disk/filesystem/network. root_path=/hostfs reads the host's
+  # /proc + /sys mounted read-only by the compose service.
+  hostmetrics:
+    collection_interval: 30s
+    root_path: /hostfs
+    scrapers:
+      cpu:
+      load:
+      memory:
+      disk:
+      filesystem:
+      network:
+  # Per-container CPU% + memory% (of limit) via the Docker socket.
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 30s
+    metrics:
+      container.cpu.utilization:
+        enabled: true
+      container.memory.percent:
+        enabled: true
+
+  # ── OPTIONAL: Postgres USE (connections, buffer hit ratio, ...) ─────────────
+  # OFF by default — kept OUT of the pipeline so an unset POSTGRES_* can't fail
+  # collector startup (which would take the USE + RED metrics down with it).
+  # TO ENABLE (unlocks the postgres-connections alerts):
+  #   1. Create a read-only monitoring user:  CREATE USER otel_monitor ...;
+  #      GRANT pg_monitor TO otel_monitor;   (Managed PG under ADR-007 → connect
+  #      as a client; point POSTGRES_ENDPOINT at the managed host)
+  #   2. Set POSTGRES_* in .env.monitoring (already passed to this container).
+  #   3. Uncomment the receiver below AND add `postgresql` to the metrics
+  #      pipeline `receivers:` list at the bottom.
+  # postgresql:
+  #   endpoint: ${env:POSTGRES_ENDPOINT}
+  #   username: ${env:POSTGRES_MONITOR_USER}
+  #   password: ${env:POSTGRES_MONITOR_PASSWORD}
+  #   databases: [grove]
+  #   collection_interval: 30s
+  #   tls:
+  #     insecure_skip_verify: true
+
+processors:
+  batch:
+    timeout: 10s
+  resourcedetection:
+    detectors: [env, system]
+    system:
+      hostname_sources: [os]
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:COST_ENV}
+        action: upsert
+      - key: host.role
+        value: odoo-droplet
+        action: upsert
+
+exporters:
+  otlphttp/openobserve:
+    endpoint: ${env:OPENOBSERVE_OTLP_BASE}
+    auth:
+      authenticator: basicauth/openobserve
+
+service:
+  extensions: [basicauth/openobserve]
+  pipelines:
+    metrics:
+      receivers: [hostmetrics, docker_stats, otlp]
+      processors: [resourcedetection, resource, batch]
+      exporters: [otlphttp/openobserve]
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [otlphttp/openobserve]
+  telemetry:
+    logs:
+      level: info

@@ -1,0 +1,137 @@
+# Blogs droplet stack - 4x Ghost 6 + MySQL 8 + Caddy.
+#
+# All state lives under /mnt/blogs-data (persistent DO volume, survives
+# droplet recreation). TLS is CF Origin CA cert files mounted into Caddy -
+# no ACME, no rate limits, no DNS plugin.
+#
+# Ghost 6 requires MySQL 8 in production (SQLite is dev-only). One MySQL
+# container, one database + least-privilege user per tenant, created by
+# /mnt/blogs-data/mysql-init/init.sql on FIRST boot only (mysql entrypoint
+# skips init scripts when the data dir is already populated).
+
+services:
+  mysql:
+    image: mysql:${MYSQL_TAG}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - /mnt/blogs-data/mysql:/var/lib/mysql
+      - /mnt/blogs-data/mysql-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  ghost-hub:
+    image: ghost:${GHOST_TAG}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      url: ${GHOST_HUB_URL}
+      admin__url: ${GHOST_HUB_ADMIN_URL}
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: ghost_hub
+      database__connection__password: ${MYSQL_GHOST_HUB_PASSWORD}
+      database__connection__database: ghost_hub
+      NODE_ENV: production
+    volumes:
+      - /mnt/blogs-data/ghost-hub:/var/lib/ghost/content
+    networks:
+      - internal
+
+  ghost-goldberry:
+    image: ghost:${GHOST_TAG}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      url: ${GHOST_GOLDBERRY_URL}
+      admin__url: ${GHOST_GOLDBERRY_ADMIN_URL}
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: ghost_goldberry
+      database__connection__password: ${MYSQL_GHOST_GOLDBERRY_PASSWORD}
+      database__connection__database: ghost_goldberry
+      NODE_ENV: production
+    volumes:
+      - /mnt/blogs-data/ghost-goldberry:/var/lib/ghost/content
+    networks:
+      - internal
+
+  ghost-ggg:
+    image: ghost:${GHOST_TAG}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      url: ${GHOST_GGG_URL}
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: ghost_ggg
+      database__connection__password: ${MYSQL_GHOST_GGG_PASSWORD}
+      database__connection__database: ghost_ggg
+      NODE_ENV: production
+    volumes:
+      - /mnt/blogs-data/ghost-ggg:/var/lib/ghost/content
+    networks:
+      - internal
+
+  ghost-nursery:
+    image: ghost:${GHOST_TAG}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      url: ${GHOST_NURSERY_URL}
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: ghost_nursery
+      database__connection__password: ${MYSQL_GHOST_NURSERY_PASSWORD}
+      database__connection__database: ghost_nursery
+      NODE_ENV: production
+    volumes:
+      - /mnt/blogs-data/ghost-nursery:/var/lib/ghost/content
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:${CADDY_TAG}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/grove-blogs/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/grove-blogs/certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - internal
+    depends_on:
+      ghost-hub:
+        condition: service_started
+      ghost-goldberry:
+        condition: service_started
+      ghost-ggg:
+        condition: service_started
+      ghost-nursery:
+        condition: service_started
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:

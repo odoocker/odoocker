@@ -1,5 +1,8 @@
-# Ignores the main configuration file.
-/.env
+# Real env files — all variants. Allow committed example/template files.
+.env
+.env.*
+!.env.example
+!.env.*.example
 
 # Ignores the pgadmin private key
 pgadmin/private_key
@@ -9,3 +12,39 @@ docker-compose.override.yml
 
 # Ignores any __pycache__ folder.
 __pycache__
+
+# MCP server config (contains env-specific paths)
+.mcp.json
+
+# macOS metadata
+.DS_Store
+
+# Docker bind-mount artifacts. The local-dev overlay binds
+# nginx/snippets-dev/cors-allowlist-dev.conf onto
+# /etc/nginx/snippets/cors-allowlist-dev.conf — when the parent dir is
+# itself a bind from ./nginx/snippets/, the runtime touches an empty
+# placeholder file inside ./nginx/snippets/ to create the mountpoint.
+# That placeholder should never be committed (it would also defeat the
+# whole dev/prod allowlist split because the empty file is then present
+# in prod containers).
+nginx/snippets/cors-allowlist-dev.conf
+
+# Terraform — local state, provider cache, real backend + var files
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+infra/terraform/environments/**/backend.hcl
+infra/terraform/environments/**/terraform.tfvars
+infra/terraform/environments/**/.terraform.lock.hcl
+*.tfplan
+tfplan.binary
+# ANY terraform plan artifact, any name -- plan binaries embed resolved
+# sensitive values (tokens, passwords). One leaked to the public repo on
+# 2026-07-04 (tfplan-cutover.bin) because the old patterns were too narrow;
+# DO auto-revoked the exposed token.
+tfplan*
+*.tfplan.bin
+plan.bin
+.env.infisical-seed.op
+infra/terraform/environments/**/op.env

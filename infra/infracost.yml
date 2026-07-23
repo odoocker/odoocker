@@ -1,0 +1,16 @@
+# Infracost config — which Terraform envs to price on infra PRs.
+# Consumed by .github/workflows/infracost.yml (spec §6 Sprint 2 — shift-left cost).
+#
+# Infracost parses the HCL directly (no terraform init / DO creds), pricing
+# droplet / volume / managed-database resources. App Platform apps
+# (digitalocean_app) aren't in Infracost's price DB yet → shown as "not
+# estimated"; the droplet/PG/volume deltas are what this catches.
+version: 0.1
+
+projects:
+  - path: infra/terraform/environments/observability
+    name: observability
+  - path: infra/terraform/environments/qa-app-platform
+    name: qa-app-platform
+  - path: infra/terraform/environments/production
+    name: production

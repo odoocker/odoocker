@@ -2,34 +2,86 @@
 
 set -e
 
-# Source environment variables
-set -a
+# Source environment variables. The .env file is bind-mounted at /.env
+# by docker-compose (NOT baked into the image — see Dockerfile comment).
 source /.env
-set +a
 
-# Create the $DB_TEMPLATE database
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "CREATE DATABASE $DB_TEMPLATE WITH TEMPLATE = template0;"
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "\\c $DB_TEMPLATE;"
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $DB_TEMPLATE -c "CREATE EXTENSION IF NOT EXISTS unaccent;"
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $DB_TEMPLATE -c "ALTER FUNCTION unaccent(text) IMMUTABLE;"
+# Sanity-check the values we're about to interpolate into SQL. psql `:'var'`
+# and `:"var"` substitution escapes special chars correctly, but the
+# parameters still must be set — empty values would create an unnamed user
+# or unquoted identifier with surprising semantics.
+: "${POSTGRES_PORT:?required for postgres init}"
+: "${POSTGRES_MAIN_USER:?required for postgres init}"
+: "${POSTGRES_DB:?required for postgres init}"
+: "${DB_TEMPLATE:?required for postgres init}"
+: "${DB_USER:?required for postgres init}"
+: "${DB_PASSWORD:?required for postgres init}"
 
-# Create Odoo user and give proper privileges
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "ALTER USER $DB_USER CREATEDB;"
+# psql variable substitution (:'var' / :"var") only works when SQL is
+# read from stdin / `-f file`, NOT from `-c` (per the psql manual). We
+# pipe via HEREDOC so the substitution actually runs — passing user-
+# supplied identifiers/values to psql in a way that's safe against
+# embedded quotes or backslashes.
+#
+# Previously these were interpolated unquoted into `psql -c "...$VAR..."`
+# strings — a single quote in DB_PASSWORD or DB_TEMPLATE would break the
+# statement; a crafted value could execute arbitrary SQL.
 
-# Give Odoo user access to copy $DB_TEMPLATE
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "GRANT ALL PRIVILEGES ON DATABASE $DB_TEMPLATE TO $DB_USER;"
-psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $DB_TEMPLATE -c "ALTER DATABASE $DB_TEMPLATE OWNER TO $DB_USER;"
+PG_FLAGS=(-p "${POSTGRES_PORT}" -U "${POSTGRES_MAIN_USER}" -v ON_ERROR_STOP=1)
 
-# Check the USE_REDIS to add sentry to LOAD variable
-if [[ $USE_PGADMIN == "true" ]]; then
-    # Create PgAdmin user and give proper privileges
-    psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "CREATE DATABASE $PGADMING_DB_NAME;"
-    psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "CREATE USER $PGADMING_DB_USER WITH PASSWORD '$PGADMIN_DB_PASSWORD';"
-    psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "GRANT ALL PRIVILEGES ON DATABASE $PGADMING_DB_NAME TO $PGADMING_DB_USER;"
-    psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $PGADMING_DB_NAME -c "GRANT ALL PRIVILEGES ON SCHEMA public TO $PGADMING_DB_USER;"
-    # Revoke Odoo user's access to pgadmin database
-    psql -p $POSTGRES_PORT -U $POSTGRES_MAIN_USER -d $POSTGRES_DB -c "REVOKE CONNECT ON DATABASE $PGADMING_DB_NAME FROM $DB_USER;"
+# Create the DB_TEMPLATE database and install unaccent.
+psql "${PG_FLAGS[@]}" -d "${POSTGRES_DB}" \
+    -v t="${DB_TEMPLATE}" <<-'EOSQL'
+    CREATE DATABASE :"t" WITH TEMPLATE = template0;
+EOSQL
+
+psql "${PG_FLAGS[@]}" -d "${DB_TEMPLATE}" <<-'EOSQL'
+    CREATE EXTENSION IF NOT EXISTS unaccent;
+    ALTER FUNCTION unaccent(text) IMMUTABLE;
+EOSQL
+
+# Create Odoo user with the configured password and grant CREATEDB.
+psql "${PG_FLAGS[@]}" -d "${POSTGRES_DB}" \
+    -v u="${DB_USER}" -v p="${DB_PASSWORD}" <<-'EOSQL'
+    CREATE USER :"u" WITH PASSWORD :'p';
+    ALTER USER :"u" CREATEDB;
+EOSQL
+
+# Grant template access to the Odoo user.
+psql "${PG_FLAGS[@]}" -d "${POSTGRES_DB}" \
+    -v t="${DB_TEMPLATE}" -v u="${DB_USER}" <<-'EOSQL'
+    GRANT ALL PRIVILEGES ON DATABASE :"t" TO :"u";
+EOSQL
+
+psql "${PG_FLAGS[@]}" -d "${DB_TEMPLATE}" \
+    -v t="${DB_TEMPLATE}" -v u="${DB_USER}" <<-'EOSQL'
+    ALTER DATABASE :"t" OWNER TO :"u";
+EOSQL
+
+# Optional: PgAdmin's own metadata database. NOTE the upstream typo
+# `PGADMING_*` (with a stray G) is preserved here because the rest of the
+# codebase (.env.example, compose) also uses it — fixing the typo would
+# be a coordinated rename across all files, out of scope for this PR.
+if [[ "${USE_PGADMIN}" == "true" ]]; then
+    : "${PGADMING_DB_NAME:?required when USE_PGADMIN=true}"
+    : "${PGADMING_DB_USER:?required when USE_PGADMIN=true}"
+    : "${PGADMIN_DB_PASSWORD:?required when USE_PGADMIN=true}"
+
+    psql "${PG_FLAGS[@]}" -d "${POSTGRES_DB}" \
+        -v n="${PGADMING_DB_NAME}" \
+        -v u="${PGADMING_DB_USER}" \
+        -v p="${PGADMIN_DB_PASSWORD}" \
+        -v odoo="${DB_USER}" <<-'EOSQL'
+        CREATE DATABASE :"n";
+        CREATE USER :"u" WITH PASSWORD :'p';
+        GRANT ALL PRIVILEGES ON DATABASE :"n" TO :"u";
+        REVOKE CONNECT ON DATABASE :"n" FROM :"odoo";
+EOSQL
+
+    psql "${PG_FLAGS[@]}" -d "${PGADMING_DB_NAME}" \
+        -v u="${PGADMING_DB_USER}" <<-'EOSQL'
+        GRANT ALL PRIVILEGES ON SCHEMA public TO :"u";
+EOSQL
 fi
 
 echo "Setup completed."

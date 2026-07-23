@@ -1,0 +1,25 @@
+# Per-PR state isolation. The preview-up workflow templates `key` to
+# `preview/pr-<number>.tfstate` so multiple in-flight previews don't
+# collide. Copy this file to backend.hcl (git-ignored), set `key`, then
+# `terraform init -backend-config=backend.hcl`.
+#
+# Local manual-test pattern (one PR at a time):
+#   cp backend.hcl.example backend.hcl
+#   # edit `key` to your test PR number
+#   export AWS_ACCESS_KEY_ID=<from GoldberryGrove Infra: spaces_bootstrap_access_key_id>
+#   export AWS_SECRET_ACCESS_KEY=<from GoldberryGrove Infra: spaces_bootstrap_secret_key>
+#   terraform init -backend-config=backend.hcl
+
+bucket                      = "grove-tf-state"
+key                         = "preview/pr-999.tfstate" # replace 999 with the real PR number
+region                      = "us-east-1"              # DO Spaces sig-v4 requires a region; us-east-1 works
+endpoint                    = "https://nyc3.digitaloceanspaces.com"
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_requesting_account_id  = true # required for newer TF/AWS provider against DO Spaces — see #28
+force_path_style            = true
+
+# Spaces access creds come from env (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY),
+# NOT from this file. The CI workflow sets them from GitHub Actions secrets;
+# locally use `op read` from Goldberry Grove - Admin / GoldberryGrove Infra.

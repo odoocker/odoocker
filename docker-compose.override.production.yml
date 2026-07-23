@@ -6,11 +6,35 @@ services:
       - 127.0.0.1:8070:8070
       - 127.0.0.1:8071:8071
       - 127.0.0.1:8072:8072
+    deploy:
+      resources:
+        limits:
+          # Adjust to your DigitalOcean droplet size.
+          # Recommended minimum for 3 businesses + inventory: 4 GB RAM, 2 vCPU
+          memory: 2G
+        reservations:
+          memory: 512M
 
   postgres:
     restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 256M
+
+  custom-modules-sync:
+    restart: unless-stopped
+    environment:
+      # Supply-chain hardening: production pins to a specific commit SHA from
+      # grove-odoo-modules, NOT a branch. A push to `main` will NOT auto-deploy
+      # to production — bumping requires an infra PR that updates this SHA.
+      # See docs/DEPLOYMENT.md "Bumping the prod modules SHA" for the workflow.
+      # Closes Asana 1215643893776947.
+      - GITSYNC_REF=515dcb3fa89966266bdf5dbdacae0835d8aa3981
 
   nginx:
     restart: unless-stopped

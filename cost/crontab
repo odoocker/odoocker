@@ -1,0 +1,6 @@
+# supercronic crontab for the Grove CostOps DO billing bridge.
+# Hourly: pull DO account balance + resource inventory and ship cost metrics to
+# OpenObserve. Hourly (not per-minute) because DO billing is daily-grained and
+# inventory changes slowly (the main mover is App Platform autoscale). No-op
+# when COST_BRIDGE_ENABLED!=true.
+0 * * * * python3 /app/do_billing_bridge.py

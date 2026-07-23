@@ -1,0 +1,20 @@
+# DigitalOcean Spaces — S3-compatible Terraform remote state backend.
+# Copy to backend.hcl (git-ignored), then:
+#   cd infra/terraform/environments/github-rulesets
+#   cp backend.hcl.example backend.hcl
+#   export AWS_ACCESS_KEY_ID=<grove-tf-state RW access key>
+#   export AWS_SECRET_ACCESS_KEY=<grove-tf-state RW secret key>
+#   terraform init -backend-config=backend.hcl
+#
+# Spaces creds come from env (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY),
+# typically via `op run`. Never put them here.
+
+bucket                      = "grove-tf-state"
+key                         = "github-rulesets/terraform.tfstate"
+region                      = "us-east-1"
+endpoints                   = { s3 = "https://nyc3.digitaloceanspaces.com" }
+skip_credentials_validation = true
+skip_requesting_account_id  = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_s3_checksum            = true

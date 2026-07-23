@@ -1,0 +1,218 @@
+name: Provision Logistics Otto (Odoo)
+
+###############################################################################
+# GOL-89 — self-serve provisioning of the least-privilege `logistics-otto`
+# Odoo user + its API key, run where access already exists (the droplet), so
+# no admin credential ever leaves Infisical/the droplet and no operator is in
+# the loop. CEO (Rick) approved option (b) on GOL-62.
+#
+# WHAT IT DOES (idempotent, re-runnable)
+#   1. SSH to the target Odoo droplet.
+#   2. Inside `docker compose exec -T odoo odoo shell` (superuser `env`, full DB
+#      context — NO admin login/API key needed; see the scripts' headers for
+#      why XML-RPC can't be used on these droplets):
+#        a. provision_logistics_user_shell.py — create/ensure `logistics-otto`
+#           with ONLY Inventory + Purchase + Sales + UoM groups.
+#        b. mint_logistics_key.py — mint the user's `rpc`-scoped API key
+#           (revokes any prior same-name key first → clean rotation).
+#   3. Mask the minted key, write it to Infisical as ODOO_API_KEY (live only).
+#
+#   Otto's runtime env (ODOO_URL / ODOO_DB / ODOO_LOGIN / ODOO_API_KEY) is
+#   injected SEPARATELY, Paperclip-side, by DevOps-Terra — the GH runner has no
+#   route to the Paperclip control plane. Key stays an Infisical reference in
+#   Otto's env; the plaintext never touches AGENTS.md/adapter config/logs/
+#   artifacts/any comment. See GOL-89 for the injection step + odoo_client.py
+#   check verification.
+#
+# DISPATCHABILITY
+#   `workflow_dispatch` only activates once this file is on the DEFAULT branch
+#   (main). Landing it there is gated by the protected-main merge policy
+#   (GOL-69) — coordinated with the CEO per GOL-89. Until then the file is
+#   inert on the feature branch (expected).
+#
+# ── Secrets / identity this workflow needs (per environment) ────────────────
+#   GH Actions secrets (mirror release.yml's SSH deploy pattern):
+#     qa   : QA_SSH_PRIVATE_KEY   (grove-qa-deploy private key), QA_HOST
+#     prod : PROD_SSH_PRIVATE_KEY, PROD_HOST
+#   Infisical (write ODOO_API_KEY): a machine identity with create/edit on the
+#     ODOO_API_KEY path in project grove-odoocker (slug grove-odoocker-qu8p),
+#     env slug per `environment`. The shared read-only OIDC identity
+#     (gh-oidc-odoocker-shared) is NOT sufficient to write — a write-scoped
+#     identity id must be seeded as INFISICAL_WRITE_IDENTITY_ID (repo/env var).
+#   Confirm/seed status is tracked on GOL-89.
+###############################################################################
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target Odoo environment"
+        type: choice
+        required: true
+        default: qa
+        options:
+          - qa
+          - prod
+      dry_run:
+        description: "Print the scope preview only — do NOT create the user or mint a key"
+        type: boolean
+        required: true
+        default: true
+
+concurrency:
+  # One provisioning run per environment at a time (key mint is a rotation).
+  group: provision-logistics-otto-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write   # OIDC → Infisical (write ODOO_API_KEY on live runs)
+
+jobs:
+  provision:
+    name: Provision + mint (${{ inputs.environment }}${{ inputs.dry_run && ' · dry-run' || ' · LIVE' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Infisical project is constant; env slug follows the target.
+      INFISICAL_PROJECT_SLUG: grove-odoocker-qu8p
+      INFISICAL_ENV_SLUG: ${{ inputs.environment == 'prod' && 'prod' || 'qa' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 2
+
+      # Resolve per-environment deploy facts. Kept in one place so a new env is
+      # a single map entry, not a scatter of `if`s across steps.
+      - name: Resolve environment
+        id: resolve
+        timeout-minutes: 1
+        env:
+          TARGET: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET" = "prod" ]; then
+            echo "deploy_dir=/opt/grove"                                                   >> "$GITHUB_OUTPUT"
+            echo "compose_args=-f docker-compose.yml -f docker-compose.override.grove.yml -f docker-compose.override.production.yml" >> "$GITHUB_OUTPUT"
+            echo "odoo_url=https://odoo.gatheringatthegrove.com"                            >> "$GITHUB_OUTPUT"
+          else
+            # qa-app-platform "Level 3" Odoo droplet: single compose file written
+            # to /etc/grove/docker-compose.yml by cloud-init; .env alongside it.
+            echo "deploy_dir=/etc/grove"                                                    >> "$GITHUB_OUTPUT"
+            echo "compose_args=--env-file /etc/grove/.env"                                  >> "$GITHUB_OUTPUT"
+            echo "odoo_url=https://odoo.qa.gatheringatthegrove.com"                         >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Load SSH agent
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        timeout-minutes: 2
+        with:
+          ssh-private-key: ${{ inputs.environment == 'prod' && secrets.PROD_SSH_PRIVATE_KEY || secrets.QA_SSH_PRIVATE_KEY }}
+
+      - name: Add droplet to known hosts
+        timeout-minutes: 1
+        env:
+          HOST: ${{ inputs.environment == 'prod' && secrets.PROD_HOST || secrets.QA_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      # ── Provision (idempotent) — pipe the shell-context script over ssh into
+      # the odoo container's `odoo shell` stdin. DB name is read from the
+      # droplet's own .env so we never hardcode it. On dry-run this prints the
+      # scope preview and writes nothing.
+      - name: Provision logistics-otto user
+        id: provision
+        timeout-minutes: 5
+        env:
+          HOST: ${{ inputs.environment == 'prod' && secrets.PROD_HOST || secrets.QA_HOST }}
+          DEPLOY_DIR: ${{ steps.resolve.outputs.deploy_dir }}
+          COMPOSE_ARGS: ${{ steps.resolve.outputs.compose_args }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          DRYENV=""
+          [ "$DRY" = "true" ] && DRYENV="-e LOGISTICS_DRY_RUN=1"
+          ssh -o StrictHostKeyChecking=yes "root@${HOST}" \
+            "set -a; . ${DEPLOY_DIR}/.env; set +a; \
+             cd ${DEPLOY_DIR} && docker compose ${COMPOSE_ARGS} exec -T ${DRYENV} \
+               odoo odoo shell -d \"\$DB_NAME\" --no-http --logfile=/dev/null" \
+            < skills/odoo-logistics/scripts/provision_logistics_user_shell.py \
+            | tee provision.out
+          echo "----- provision output (scope preview / uid; no secrets) -----"
+          cat provision.out
+
+      # ── Mint the API key (live runs only). Output is captured, masked
+      # immediately, and never echoed. Idempotent: prior same-name key revoked.
+      - name: Mint logistics-otto API key
+        id: mint
+        if: ${{ inputs.dry_run == false }}
+        timeout-minutes: 5
+        env:
+          HOST: ${{ inputs.environment == 'prod' && secrets.PROD_HOST || secrets.QA_HOST }}
+          DEPLOY_DIR: ${{ steps.resolve.outputs.deploy_dir }}
+          COMPOSE_ARGS: ${{ steps.resolve.outputs.compose_args }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=yes "root@${HOST}" \
+            "set -a; . ${DEPLOY_DIR}/.env; set +a; \
+             cd ${DEPLOY_DIR} && docker compose ${COMPOSE_ARGS} exec -T \
+               odoo odoo shell -d \"\$DB_NAME\" --no-http --logfile=/dev/null" \
+            < skills/odoo-logistics/scripts/mint_logistics_key.py \
+            > mint.out 2> mint.err || { echo "::error::mint failed"; cat mint.err; exit 1; }
+          KEY="$(sed -n '/----BEGIN LOGISTICS_OTTO_API_KEY----/{n;p;}' mint.out)"
+          if [ -z "$KEY" ]; then
+            echo "::error::no key parsed from mint output"; sed -n '/BEGIN/,/END/d;p' mint.err; exit 1
+          fi
+          echo "::add-mask::$KEY"
+          # Hand off to the next step via env file (masked value never printed).
+          printf 'ODOO_OTTO_KEY=%s\n' "$KEY" >> "$GITHUB_ENV"
+          rm -f mint.out
+          echo "key minted + masked (value withheld from logs)"
+
+      # Write the key to Infisical (live runs only). Requires a write-scoped
+      # machine identity — see header. This is the ONLY place the plaintext
+      # touches a durable store, and it goes straight into the secrets manager.
+      - name: Store ODOO_API_KEY in Infisical
+        if: ${{ inputs.dry_run == false }}
+        timeout-minutes: 3
+        env:
+          WRITE_IDENTITY_ID: ${{ vars.INFISICAL_WRITE_IDENTITY_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WRITE_IDENTITY_ID:-}" ]; then
+            echo "::error::INFISICAL_WRITE_IDENTITY_ID not set — cannot write ODOO_API_KEY. Seed a write-scoped identity (see workflow header / GOL-89) and re-run."
+            exit 1
+          fi
+          curl -fsSL -o infisical.deb https://github.com/Infisical/cli/releases/latest/download/infisical_linux_amd64.deb
+          sudo dpkg -i infisical.deb
+          # OIDC login for the write identity → short-lived token.
+          INFISICAL_TOKEN="$(infisical login --method=oidc --machine-identity-id="$WRITE_IDENTITY_ID" --silent --plain)"
+          export INFISICAL_TOKEN
+          infisical secrets set ODOO_API_KEY="$ODOO_OTTO_KEY" \
+            --projectId "$INFISICAL_PROJECT_SLUG" \
+            --env "$INFISICAL_ENV_SLUG" --path "/" >/dev/null
+          echo "ODOO_API_KEY written to Infisical (${INFISICAL_ENV_SLUG})"
+
+      - name: Summary
+        if: ${{ always() }}
+        env:
+          TARGET: ${{ inputs.environment }}
+          DRY: ${{ inputs.dry_run }}
+          ODOO_URL: ${{ steps.resolve.outputs.odoo_url }}
+        run: |
+          {
+            echo "### Provision Logistics Otto — ${TARGET}"
+            echo ""
+            echo "- mode: $([ "$DRY" = "true" ] && echo 'DRY-RUN (scope preview only)' || echo 'LIVE')"
+            echo "- ODOO_URL: ${ODOO_URL}"
+            echo "- login: logistics-otto  (Inventory + Purchase + Sales + UoM only)"
+            echo ""
+            echo "Next (live): DevOps-Terra injects ODOO_URL/ODOO_DB/ODOO_LOGIN/ODOO_API_KEY"
+            echo "into Otto's Paperclip env (Infisical ref, not plaintext), then runs"
+            echo "\`odoo_client.py check\`. Tracked on GOL-89."
+          } >> "$GITHUB_STEP_SUMMARY"

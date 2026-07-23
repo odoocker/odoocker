@@ -1,0 +1,17 @@
+# Remote state backend config for `terraform init -backend-config=backend.hcl`.
+# Copy this to `backend.hcl` and `op inject` the real values, OR pass via
+# CLI flags during `make qa-l3-init` (when that target lands in Phase 5).
+#
+# The actual backend.hcl is gitignored (.gitignore line for *.hcl files
+# excluding *.example).
+
+bucket                      = "grove-tf-state"
+region                      = "us-east-1"        # SPACES_REGION constant; differs from var.region (DO droplet region)
+key                         = "qa-app-platform/terraform.tfstate"
+endpoint                    = "https://nyc3.digitaloceanspaces.com"
+access_key                  = "REPLACE_WITH_SPACES_ACCESS_KEY"
+secret_key                  = "REPLACE_WITH_SPACES_SECRET_KEY"
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_requesting_account_id  = true

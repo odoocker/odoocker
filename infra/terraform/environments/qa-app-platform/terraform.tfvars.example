@@ -1,0 +1,18 @@
+# Sensitive values flow via TF_VAR_* env vars at apply time, NOT this file.
+# Use `op run --env-file .env.op -- terraform apply` (or `make qa-l3-apply`
+# once the make target is wired in Phase 5). The .env.op file maps:
+#
+#   TF_VAR_do_token = op://Goldberry Grove - Admin/GoldberryGrove Infra/do_token
+#   TF_VAR_cloudflare_api_token = op://Goldberry Grove - Admin/GoldberryGrove Infra/cloudflare_api_token
+#
+# This file documents the non-sensitive vars an operator might want to
+# override (defaults work for the canonical setup):
+
+# admin_ip_cidr = "74.47.41.38/32"
+# region        = "nyc3"
+# qa_subdomain  = "qa-l3"            # parallel-cutover; flips to "qa" in Phase 4
+# pg_size       = "db-s-1vcpu-1gb"   # dev tier; bump to db-s-1vcpu-2gb in prod
+# odoo_droplet_size = "s-1vcpu-2gb"  # half the size of the monolith QA droplet
+# odoo_image_tag    = "latest"       # pin to sha-<hex> for reproducibility
+# caddy_image_tag   = "latest"
+# acme_endpoint     = "https://acme-v02.api.letsencrypt.org/directory"   # LE staging for iteration

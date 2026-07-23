@@ -1,0 +1,4 @@
+<clickhouse>
+    <!-- https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#mark_cache_size -->
+    <mark_cache_size>524288000</mark_cache_size>
+</clickhouse>
